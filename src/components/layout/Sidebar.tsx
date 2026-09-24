@@ -11,7 +11,6 @@ import {
   Settings,
   History,
   Award,
-  ChevronLeft,
   ChevronRight,
   X,
   GraduationCap,
@@ -254,8 +253,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarContent = (
     <div className="flex flex-col h-full bg-white border-r border-[#E7E5E4] select-none">
       {/* Brand Header */}
-      <div className="h-16 px-4 flex items-center justify-between border-b border-[#E7E5E4] bg-white">
-        <div className="flex items-center gap-3 overflow-hidden">
+      <div className="relative h-16 px-4 flex items-center border-b border-[#E7E5E4] bg-white transition-colors duration-300">
+        <div
+          className="flex items-center overflow-hidden cursor-pointer flex-1 min-w-0"
+          onClick={collapsed ? onToggleCollapse : undefined}
+          title={collapsed ? "Nhấn để mở rộng thanh điều hướng" : undefined}
+        >
           <KitoVuaLogo
             size={40}
             showText={!collapsed}
@@ -281,13 +284,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={onToggleCollapse}
             aria-label={collapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
-            className="hidden md:flex items-center justify-center w-8 h-8 rounded-[8px] text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4] transition-colors cursor-pointer"
+            className={`
+              hidden md:flex items-center justify-center cursor-pointer transition-all duration-300 ease-in-out
+              ${
+                collapsed
+                  ? "absolute -right-3.5 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full bg-white border border-[#D6D3D1] shadow-xs text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4] hover:border-[#A8A29E] hover:scale-110 active:scale-95"
+                  : "w-8 h-8 rounded-[8px] text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4]"
+              }
+            `}
           >
-            {collapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
+            <ChevronRight
+              className={`w-4 h-4 transition-transform duration-300 ease-in-out ${
+                collapsed ? "rotate-0" : "rotate-180"
+              }`}
+            />
           </button>
         )}
       </div>
@@ -299,11 +309,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {sections.map(([sectionName, sectionItems]) => (
           <div key={sectionName} className="space-y-1">
-            {!collapsed && (
-              <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#A8A29E]">
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                collapsed ? "max-h-0 opacity-0 pb-0" : "max-h-8 opacity-100 px-3 pb-1"
+              }`}
+            >
+              <div className="text-[11px] font-bold uppercase tracking-wider text-[#A8A29E] whitespace-nowrap">
                 {sectionName}
               </div>
-            )}
+            </div>
 
             <div className="space-y-1">
               {sectionItems.map((item) => {
@@ -331,7 +345,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     title={collapsed ? item.label : undefined}
                     aria-current={isActive ? "page" : undefined}
                     className={`
-                      w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[14px] font-medium transition-all relative group cursor-pointer
+                      w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[14px] font-medium transition-colors duration-200 relative group cursor-pointer
                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B4232C]/30
                       ${
                         isDisabled
@@ -340,7 +354,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           ? "bg-[#FFF1F2] text-[#B4232C] font-semibold shadow-xs"
                           : "text-[#57534E] hover:bg-[#F5F5F4] hover:text-[#1C1917] active:bg-[#E7E5E4]"
                       }
-                      ${collapsed ? "justify-center px-0" : ""}
                     `}
                   >
                     {/* Active Indicator Bar (Emphasis not relying on color alone) */}
@@ -351,9 +364,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       />
                     )}
 
-                    {/* Icon with active emphasis */}
+                    {/* Icon with stable anchor wrapper - NO horizontal jumping */}
                     <div
-                      className={`flex-shrink-0 transition-transform ${
+                      className={`w-6 h-6 flex items-center justify-center flex-shrink-0 transition-transform ${
                         isActive
                           ? "text-[#B4232C] scale-105"
                           : "text-[#78716C] group-hover:text-[#1C1917]"
@@ -362,23 +375,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {item.icon}
                     </div>
 
-                    {/* Label & Badge */}
-                    {!collapsed && (
-                      <div className="flex-1 flex items-center justify-between min-w-0">
-                        <span className="truncate text-left">{item.label}</span>
-                        {item.badge && (
-                          <span
-                            className={`ml-2 px-2 py-0.5 text-[11px] font-bold rounded-full ${
-                              isActive
-                                ? "bg-[#B4232C] text-white"
-                                : "bg-[#F5F5F4] text-[#78716C] group-hover:bg-[#E7E5E4]"
-                            }`}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {/* Label & Badge: smooth max-width and opacity transition */}
+                    <div
+                      className={`flex-1 flex items-center justify-between min-w-0 overflow-hidden transition-all duration-300 ease-in-out ${
+                        collapsed ? "max-w-0 opacity-0 pointer-events-none" : "max-w-[200px] opacity-100"
+                      }`}
+                    >
+                      <span className="truncate text-left whitespace-nowrap">{item.label}</span>
+                      {item.badge && (
+                        <span
+                          className={`ml-2 px-2 py-0.5 text-[11px] font-bold rounded-full whitespace-nowrap ${
+                            isActive
+                              ? "bg-[#B4232C] text-white"
+                              : "bg-[#F5F5F4] text-[#78716C] group-hover:bg-[#E7E5E4]"
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -388,18 +403,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Footer / User Role Info */}
-      {user && !collapsed && (
-        <div className="p-3 border-t border-[#E7E5E4] bg-[#FAFAF9]">
-          <div className="flex items-center gap-2.5 p-2 rounded-[8px] bg-white border border-[#E7E5E4]">
-            <div className="w-8 h-8 rounded-full bg-[#FFF1F2] text-[#B4232C] flex items-center justify-center font-bold text-[12px] flex-shrink-0">
+      {user && (
+        <div className="border-t border-[#E7E5E4] bg-[#FAFAF9] p-3 transition-colors duration-300">
+          <div className="flex items-center gap-2.5 p-2 rounded-[8px] bg-white border border-[#E7E5E4] overflow-hidden">
+            <div
+              title={`${user.christianName ? `${user.christianName} ` : ""}${user.name} (${
+                role === "ADMIN"
+                  ? "Quản trị viên"
+                  : role === "GLV"
+                  ? "Giáo lý viên"
+                  : role === "PARENT"
+                  ? "Phụ huynh"
+                  : "Học sinh"
+              })`}
+              className="w-8 h-8 rounded-full bg-[#FFF1F2] text-[#B4232C] border border-[#FECDD3] flex items-center justify-center font-bold text-[12px] flex-shrink-0"
+            >
               {role.substring(0, 2)}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold text-[#1C1917] truncate leading-tight">
+
+            <div
+              className={`min-w-0 flex-1 overflow-hidden transition-all duration-300 ease-in-out ${
+                collapsed ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"
+              }`}
+            >
+              <div className="text-[13px] font-semibold text-[#1C1917] truncate leading-tight whitespace-nowrap">
                 {user.christianName ? `${user.christianName} ` : ""}
                 {user.name}
               </div>
-              <div className="text-[11px] text-[#78716C] truncate mt-0.5">
+              <div className="text-[11px] text-[#78716C] truncate mt-0.5 whitespace-nowrap">
                 {role === "ADMIN"
                   ? "Quản trị viên"
                   : role === "GLV"
@@ -419,7 +450,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* Desktop Persistent Sidebar */}
       <aside
-        className={`hidden md:block flex-shrink-0 transition-all duration-200 ${
+        className={`hidden md:block flex-shrink-0 transition-[width] duration-300 ease-in-out ${
           collapsed ? "w-20" : "w-64"
         } ${className}`}
       >

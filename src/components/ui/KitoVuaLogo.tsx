@@ -16,7 +16,7 @@ export const KitoVuaLogo: React.FC<KitoVuaLogoProps> = ({
   const dimension = typeof size === "number" ? `${size}px` : size;
 
   return (
-    <div className={`inline-flex items-center gap-3 ${className}`}>
+    <div className={`inline-flex items-center ${showText ? "gap-3" : "gap-0"} transition-all duration-300 ease-in-out ${className}`}>
       <div
         style={{ width: dimension, height: dimension }}
         className="relative flex-shrink-0 select-none overflow-hidden rounded-full shadow-xs transition-transform duration-200 hover:scale-105"
@@ -134,16 +134,18 @@ export const KitoVuaLogo: React.FC<KitoVuaLogoProps> = ({
         </svg>
       </div>
 
-      {showText && (
-        <div className="flex flex-col min-w-0">
-          <span className="font-serif font-bold text-[16px] text-[#1C1917] tracking-tight leading-tight truncate">
-            Đoàn Kitô Vua
-          </span>
-          <span className="text-[11px] text-[#78716C] truncate font-medium">
-            {subtitle}
-          </span>
-        </div>
-      )}
+      <div
+        className={`flex flex-col min-w-0 transition-all duration-300 ease-in-out overflow-hidden ${
+          showText ? "max-w-[200px] opacity-100" : "max-w-0 opacity-0 pointer-events-none"
+        }`}
+      >
+        <span className="font-serif font-bold text-[16px] text-[#1C1917] tracking-tight leading-tight truncate whitespace-nowrap">
+          Đoàn Kitô Vua
+        </span>
+        <span className="text-[11px] text-[#78716C] truncate font-medium whitespace-nowrap">
+          {subtitle}
+        </span>
+      </div>
     </div>
   );
 };
