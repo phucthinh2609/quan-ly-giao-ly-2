@@ -15,6 +15,9 @@ import {
 } from "./components/ui";
 import { AttendancePage } from "./components/attendance";
 import { TeacherScoresPage } from "./pages/teacher/scores";
+import { TeacherDashboard } from "./pages/teacher/TeacherDashboard";
+import { AdminDashboard } from "./pages/admin/AdminDashboard";
+import { StudentPortal } from "./pages/student/StudentPortal";
 import { ParentDashboard } from "./pages/parent";
 import { ParentProvider } from "./context/ParentContext";
 import {
@@ -128,6 +131,13 @@ const ROUTE_ROLE_MAPPINGS: RouteMapping[] = [
     allowedRoles: ["PARENT", "STUDENT"],
     requiredPermission: "notification:view",
     notes: "Thông báo chung, lớp học, học sinh (điểm danh/điểm số) và tin khẩn",
+  },
+  {
+    route: "/student/portal",
+    name: "Góc Thiếu Nhi Gamification",
+    allowedRoles: ["STUDENT", "PARENT", "ADMIN"],
+    defaultRedirect: "/student/portal",
+    notes: "Thành tích, Cấp độ XP, Huy hiệu & Bộ chọn học sinh (RULE-015)",
   },
 ];
 
@@ -280,14 +290,49 @@ function Phase3Showcase() {
         <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto gap-2">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab("showcase")}
-              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
-                activeTab === "showcase"
-                  ? "bg-[#FFF1F2] text-[#B4232C]"
-                  : "text-[#57534E] hover:text-[#1C1917]"
+              onClick={() => {
+                setActiveTab("showcase");
+                switchRole("ADMIN");
+                handleNavigate("/admin/dashboard");
+              }}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentPath === "/admin/dashboard"
+                  ? "bg-[#B4232C] text-white shadow-xs"
+                  : "bg-[#FFF1F2] text-[#B4232C] hover:bg-[#FFE4E6]"
               }`}
             >
-              🏛️ AppShell & Layout Live Preview
+              <span>👑</span>
+              <span>Admin Dashboard (Phase 7)</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("showcase");
+                switchRole("GLV");
+                handleNavigate("/teacher/dashboard");
+              }}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentPath === "/teacher/dashboard"
+                  ? "bg-[#B4232C] text-white shadow-xs"
+                  : "bg-[#FFF1F2] text-[#B4232C] hover:bg-[#FFE4E6]"
+              }`}
+            >
+              <span>🧑‍🏫</span>
+              <span>GLV Dashboard (Phase 7)</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("showcase");
+                switchRole("STUDENT");
+                handleNavigate("/student/portal");
+              }}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                currentPath === "/student/portal"
+                  ? "bg-[#7C5CFC] text-white shadow-xs"
+                  : "bg-[#EFF6FF] text-[#7C5CFC] hover:bg-[#DBEAFE]"
+              }`}
+            >
+              <span>🎮</span>
+              <span>Student Gamification & Selector (Phase 7)</span>
             </button>
             <button
               onClick={() => {
@@ -414,6 +459,18 @@ function Phase3Showcase() {
                 ) : currentPath === "/teacher/scores" ? (
                   <TeacherScoresPage
                     onBack={() => handleNavigate(role === "GLV" ? "/teacher/dashboard" : "/admin/dashboard")}
+                  />
+                ) : currentPath === "/admin/dashboard" ? (
+                  <AdminDashboard
+                    onNavigate={handleNavigate}
+                  />
+                ) : currentPath === "/teacher/dashboard" ? (
+                  <TeacherDashboard
+                    onNavigate={handleNavigate}
+                  />
+                ) : currentPath === "/student/portal" ? (
+                  <StudentPortal
+                    onNavigate={handleNavigate}
                   />
                 ) : role === "PARENT" || currentPath === "/dashboard" || currentPath.startsWith("/parent") ? (
                   <ParentDashboard
