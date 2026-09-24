@@ -1,73 +1,118 @@
+import { ReactNode } from "react";
+
+// ============================================================================
+// USER ROLES & PERMISSIONS (§1, §7, §29)
+// ============================================================================
+
+export type UserRole = "ADMIN" | "GLV" | "PARENT" | "STUDENT";
+
 /**
- * Domain & Design System Types
- * Quản lý Học tập Giáo lý – Đoàn Kitô Vua
+ * Standard Permission Keys (§29)
+ * Format: resource:action
  */
-
-export type UserRole = 'ADMIN' | 'GLV' | 'PARENT' | 'STUDENT';
-
-export type AsyncStatus = 'idle' | 'loading' | 'success' | 'error';
-export type UIState = 'loading' | 'empty' | 'error' | 'success';
-
-export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE';
+export type AppPermission =
+  | "student:view"
+  | "student:create"
+  | "student:update"
+  | "student:delete"
+  | "attendance:view"
+  | "attendance:create"
+  | "attendance:update"
+  | "score:view"
+  | "score:create"
+  | "score:update"
+  | "score:export"
+  | "notification:view"
+  | "notification:create"
+  | "user:view"
+  | "user:create"
+  | "user:update"
+  | "user:delete"
+  | "settings:view"
+  | "settings:update"
+  | (string & {});
 
 export interface User {
   id: string;
   name: string;
-  saintName?: string; // Tên Thánh (Maria, Giuse, Phaolô, v.v.)
+  christianName?: string;
   email?: string;
   role: UserRole;
   avatarUrl?: string;
+  assignedClass?: string; // For GLV
+  childrenIds?: string[]; // For PARENT
 }
 
-export interface Student {
+// ============================================================================
+// NAVIGATION & LAYOUT TYPES (§10–13, §14)
+// ============================================================================
+
+export interface NavigationItem {
   id: string;
-  code: string;
-  saintName: string;
-  fullName: string;
-  dob: string;
-  classId: string;
-  className: string;
-  avatarUrl?: string;
-  parentId?: string;
-  parentName?: string;
-  parentPhone?: string;
+  label: string;
+  path: string;
+  icon: ReactNode;
+  activeIcon?: ReactNode;
+  badge?: string | number;
+  disabled?: boolean;
+  requiredPermission?: AppPermission;
+  allowedRoles?: UserRole[];
+  section?: string;
 }
 
-export interface ClassInfo {
-  id: string;
-  name: string;
-  division: string; // Phân đoàn: Khai Tâm, Rước Lễ, Thêm Sức, Bao Đồng
-  room: string;
-  teacherId: string;
-  teacherName: string;
-  totalStudents: number;
+export interface BreadcrumbItem {
+  label: string;
+  path?: string;
+  href?: string;
+  onClick?: () => void;
+  active?: boolean;
 }
 
-export interface AttendanceRecord {
-  studentId: string;
-  date: string;
-  status: AttendanceStatus;
-  note?: string;
-}
-
-export interface ScoreItem {
-  id: string;
-  studentId: string;
-  subject: string; // 'Giáo lý' | 'Kinh Thánh' | 'Kinh nguyện'
-  semester: string; // 'Học kỳ I' | 'Học kỳ II'
-  examType: 'oral' | 'quiz_15m' | 'midterm' | 'final'; // Miệng, 15p, Giữa kỳ, Cuối kỳ
-  score: number | null;
-  previousScore?: number;
-  updatedAt?: string;
-}
-
-export interface NotificationItem {
-  id: string;
+export interface HeaderProps {
   title: string;
-  preview: string;
-  content: string;
-  category: 'GENERAL' | 'CLASS' | 'STUDENT' | 'URGENT';
-  publishedAt: string;
-  isRead: boolean;
-  important?: boolean;
+  showBackButton?: boolean;
+  notificationCount?: number;
+  user?: User;
+  onBack?: () => void;
+  onNotificationClick?: () => void;
+  onMobileMenuToggle?: () => void;
+  onLogout?: () => void;
+  actions?: ReactNode;
+  scrolled?: boolean;
+  breadcrumbs?: BreadcrumbItem[];
+}
+
+export interface SidebarProps {
+  role: UserRole;
+  currentPath: string;
+  onNavigate: (path: string) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  user?: User;
+  className?: string;
+  isOpenOnMobile?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export interface MobileBottomNavProps {
+  role: UserRole;
+  currentPath: string;
+  onNavigate: (path: string) => void;
+  notificationCount?: number;
+  onMoreClick?: () => void;
+  className?: string;
+}
+
+export interface AppShellProps {
+  role: UserRole;
+  children: ReactNode;
+  title?: string;
+  showBackButton?: boolean;
+  onBack?: () => void;
+  notificationCount?: number;
+  user?: User;
+  currentPath?: string;
+  onNavigate?: (path: string) => void;
+  breadcrumbs?: BreadcrumbItem[];
+  headerActions?: ReactNode;
 }

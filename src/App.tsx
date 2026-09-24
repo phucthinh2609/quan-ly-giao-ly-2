@@ -1,652 +1,709 @@
 import { useState } from "react";
+import { AppShell } from "./components/layout";
+import {
+  RouteGuard,
+  PermissionGate,
+  Forbidden403,
+} from "./components/auth";
 import {
   Button,
-  IconButton,
-  Input,
-  NumericInput,
-  Select,
-  Checkbox,
-  RadioGroup,
   Badge,
-  Avatar,
-  Divider,
-  Spinner,
+  StatCard,
+  ToastProvider,
+  useToast,
 } from "./components/ui";
 import {
-  Bell,
-  MoreVertical,
-  X,
-  ArrowLeft,
-  Pencil,
-  Trash2,
-  Plus,
-  ArrowRight,
-  Mail,
+  AuthProvider,
+  useAuth,
+  ROLE_DEFAULT_PATHS,
+} from "./context/AuthContext";
+import { UserRole, AppPermission, BreadcrumbItem } from "./types";
+import {
   ShieldCheck,
-  CheckCircle,
-  GraduationCap,
-  Calendar,
-  Layers,
+  ShieldAlert,
+  Smartphone,
+  Monitor,
+  Users,
+  CheckSquare,
+  FileSpreadsheet,
+  Lock,
+  Trash2,
+  Download,
+  LogOut,
+  LogIn,
 } from "lucide-react";
 
-export default function App() {
-  // State variables for interactive testing
-  const [activeTab, setActiveTab] = useState<"all" | "matrix" | "form">("matrix");
+// ============================================================================
+// ROUTE TO ROLE MAPPING CONTRACT TABLE DATA (§2, §7, §14, §19)
+// ============================================================================
+interface RouteMapping {
+  route: string;
+  name: string;
+  allowedRoles: UserRole[];
+  requiredPermission?: AppPermission;
+  defaultRedirect?: string;
+  notes: string;
+}
 
-  // Input states
-  const [textValue, setTextValue] = useState("");
-  const [errorInputVal, setErrorInputVal] = useState("admin@");
-  const [numericScore, setNumericScore] = useState<number | null>(8.5);
-  const [outOfRangeScore, setOutOfRangeScore] = useState<number | null>(11);
+const ROUTE_ROLE_MAPPINGS: RouteMapping[] = [
+  {
+    route: "/admin/dashboard",
+    name: "Admin Dashboard",
+    allowedRoles: ["ADMIN"],
+    defaultRedirect: "/admin/dashboard",
+    notes: "Tổng quan toàn đoàn, KPI 4 cột, chart chuyên cần & điểm, cảnh báo",
+  },
+  {
+    route: "/admin/users",
+    name: "Quản lý Người dùng",
+    allowedRoles: ["ADMIN"],
+    requiredPermission: "user:view",
+    notes: "CRUD tài khoản GLV, Phụ huynh, Học sinh (§3)",
+  },
+  {
+    route: "/admin/classes",
+    name: "Quản lý Lớp học",
+    allowedRoles: ["ADMIN"],
+    notes: "Tạo lớp, phân công GLV, cấu hình khối lớp",
+  },
+  {
+    route: "/admin/settings",
+    name: "Cài đặt Hệ thống",
+    allowedRoles: ["ADMIN"],
+    requiredPermission: "settings:update",
+    notes: "Thông tin Giáo xứ, niên khóa, quy tắc tính điểm",
+  },
+  {
+    route: "/teacher/dashboard",
+    name: "GLV Dashboard",
+    allowedRoles: ["GLV"],
+    defaultRedirect: "/teacher/dashboard",
+    notes: "Truy cập nhanh Điểm danh & Nhập điểm trong tối đa 1 thao tác",
+  },
+  {
+    route: "/teacher/attendance",
+    name: "GLV Điểm danh",
+    allowedRoles: ["ADMIN", "GLV"],
+    requiredPermission: "attendance:update",
+    notes: "Điểm danh 1 chạm (Có mặt, Vắng, Phép, Muộn) + Lưu nhanh",
+  },
+  {
+    route: "/teacher/scores",
+    name: "GLV Nhập điểm",
+    allowedRoles: ["ADMIN", "GLV"],
+    requiredPermission: "score:update",
+    notes: "Nhập điểm hàng loạt, hỗ trợ phím số, Import Excel",
+  },
+  {
+    route: "/dashboard",
+    name: "Parent/Student Dashboard",
+    allowedRoles: ["PARENT", "STUDENT"],
+    defaultRedirect: "/dashboard",
+    notes: "Điểm trung bình, chuyên cần, nhận xét GLV, thành tích gamification",
+  },
+  {
+    route: "/parent/scores",
+    name: "Phụ huynh Xem Bảng điểm",
+    allowedRoles: ["PARENT", "STUDENT"],
+    requiredPermission: "score:view",
+    notes: "Xem điểm con, đổi học sinh con đang xem (Child Switcher)",
+  },
+  {
+    route: "/parent/attendance",
+    name: "Lịch sử Điểm danh",
+    allowedRoles: ["PARENT", "STUDENT"],
+    requiredPermission: "attendance:view",
+    notes: "Tỷ lệ chuyên cần, danh sách các buổi học Chúa Nhật",
+  },
+];
 
-  // Select state
-  const [selectedClass, setSelectedClass] = useState("7a");
-  const classOptions = [
-    { value: "6a", label: "Lớp Khai Tâm 1 (6A)", description: "GLV phụ trách: Thầy Minh" },
-    { value: "7a", label: "Lớp Rước Lễ 1 (7A)", description: "GLV phụ trách: Cô Mai" },
-    { value: "8a", label: "Lớp Thêm Sức 1 (8A)", description: "GLV phụ trách: Thầy Dũng" },
-    { value: "9a", label: "Lớp Bao Đồng 1 (9A)", description: "GLV phụ trách: Cô Hương", disabled: true },
-  ];
+// Standard keys from 03_Component_Library.md §29
+const PERMISSION_TEST_KEYS: { key: AppPermission; label: string; icon: string }[] = [
+  { key: "student:view", label: "Xem học sinh (student:view)", icon: "👥" },
+  { key: "attendance:update", label: "Cập nhật điểm danh (attendance:update)", icon: "✅" },
+  { key: "score:update", label: "Cập nhật điểm (score:update)", icon: "📝" },
+  { key: "score:export", label: "Xuất Excel điểm (score:export)", icon: "📊" },
+  { key: "user:create", label: "Tạo người dùng (user:create)", icon: "➕" },
+  { key: "user:delete", label: "Xóa người dùng (user:delete)", icon: "🗑️" },
+  { key: "settings:update", label: "Cập nhật cài đặt (settings:update)", icon: "⚙️" },
+];
 
-  // Checkbox states
-  const [chkUnchecked, setChkUnchecked] = useState(false);
-  const [chkChecked, setChkChecked] = useState(true);
-  const [chkIndeterminate, setChkIndeterminate] = useState(true);
+function Phase3Showcase() {
+  const toast = useToast();
+  const { role, user, isAuthenticated, switchRole, logout, login, hasPermission } = useAuth();
 
-  // Radio state
-  const [radioRole, setRadioRole] = useState("glv");
+  // Navigation simulation state
+  const [currentPath, setCurrentPath] = useState<string>(ROLE_DEFAULT_PATHS[role]);
+  const [viewportMode, setViewportMode] = useState<"desktop" | "mobile_sim">("desktop");
+  const [activeTab, setActiveTab] = useState<"showcase" | "matrix" | "guard_test">("showcase");
 
-  // Button loading toggle
-  const [btnLoading, setBtnLoading] = useState(false);
+  // Breadcrumb generator based on current route
+  const getBreadcrumbs = (path: string): BreadcrumbItem[] => {
+    if (path.startsWith("/admin")) {
+      return [
+        { label: "Admin Portal", onClick: () => handleNavigate("/admin/dashboard") },
+        { label: path.includes("users") ? "Người dùng" : path.includes("classes") ? "Lớp học" : "Tổng quan" },
+      ];
+    }
+    if (path.startsWith("/teacher")) {
+      return [
+        { label: "Giáo lý viên", onClick: () => handleNavigate("/teacher/dashboard") },
+        { label: path.includes("attendance") ? "Điểm danh" : path.includes("scores") ? "Nhập điểm" : "Lớp của tôi" },
+      ];
+    }
+    return [
+      { label: "Trang chủ", onClick: () => handleNavigate("/dashboard") },
+      { label: path.includes("scores") ? "Bảng điểm" : path.includes("attendance") ? "Chuyên cần" : "Tổng quan học tập" },
+    ];
+  };
+
+  const handleNavigate = (path: string) => {
+    setCurrentPath(path);
+  };
+
+  const handleRoleChange = (newRole: UserRole) => {
+    switchRole(newRole);
+    const newHome = ROLE_DEFAULT_PATHS[newRole];
+    setCurrentPath(newHome);
+    toast.info(`Đã đổi vai trò sang: ${newRole} · Điều hướng về: ${newHome}`);
+  };
+
+  // Find mapping for current route
+  const currentRouteMeta = ROUTE_ROLE_MAPPINGS.find((r) => r.route === currentPath) || {
+    route: currentPath,
+    name: currentPath,
+    allowedRoles: ["ADMIN", "GLV", "PARENT", "STUDENT"] as UserRole[],
+    notes: "Trang điều hướng linh hoạt",
+  };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] text-[#292524] pb-20 font-sans">
-      {/* Top Banner / Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-[#E7E5E4] px-4 py-3 sm:px-6 shadow-xs">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[10px] bg-[#B4232C] text-white flex items-center justify-center font-serif font-bold text-xl shadow-xs">
+    <div className="min-h-screen bg-[#F5F5F4] text-[#292524] flex flex-col font-sans">
+      {/* ===================================================================== */}
+      {/* TOP CONTROL BAR: ROLE SWITCHER, AUTH STATUS, VIEWPORT SIMULATOR */}
+      {/* ===================================================================== */}
+      <div className="bg-[#1C1917] text-white px-4 py-2.5 sm:px-6 z-50 shadow-md">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-[13px]">
+          {/* Brand & Phase indicator */}
+          <div className="flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded bg-[#B4232C] text-white flex items-center justify-center font-bold text-xs">
               ✝
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-[17px] sm:text-[19px] font-bold text-[#1C1917] tracking-tight">
-                  Đoàn Kitô Vua
-                </h1>
-                <Badge variant="primary" size="sm">Tier 1 Primitives</Badge>
-              </div>
-              <p className="text-[12px] sm:text-[13px] text-[#78716C]">
-                03_Component_Library (§4–9) & State Matrix (§32)
-              </p>
-            </div>
+            </span>
+            <span className="font-bold tracking-tight font-serif text-[14px]">
+              Phase 3 Layout & Navigation
+            </span>
+            <Badge variant="primary" size="sm">03_Component_Library §10–13, §29</Badge>
           </div>
 
+          {/* Role Switching Selector */}
           <div className="flex items-center gap-2">
-            <IconButton
-              aria-label="Thông báo hệ thống"
-              variant="outline"
-              size="sm"
-              icon={<Bell className="w-4 h-4 text-[#B4232C]" />}
-            />
-            <Avatar name="Trần Văn B" roleBadge="GLV" size="sm" status="online" />
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content Showcase */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 p-1 bg-[#F5F5F4] rounded-[10px] w-fit mb-6 border border-[#E7E5E4]">
-          <button
-            onClick={() => setActiveTab("matrix")}
-            className={`px-4 py-2 text-[14px] font-semibold rounded-[8px] transition-all cursor-pointer ${
-              activeTab === "matrix"
-                ? "bg-white text-[#B4232C] shadow-xs"
-                : "text-[#57534E] hover:text-[#1C1917]"
-            }`}
-          >
-            📋 Bảng State Matrix (§32)
-          </button>
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`px-4 py-2 text-[14px] font-semibold rounded-[8px] transition-all cursor-pointer ${
-              activeTab === "all"
-                ? "bg-white text-[#B4232C] shadow-xs"
-                : "text-[#57534E] hover:text-[#1C1917]"
-            }`}
-          >
-            🧩 Toàn bộ Component Tier 1
-          </button>
-          <button
-            onClick={() => setActiveTab("form")}
-            className={`px-4 py-2 text-[14px] font-semibold rounded-[8px] transition-all cursor-pointer ${
-              activeTab === "form"
-                ? "bg-white text-[#B4232C] shadow-xs"
-                : "text-[#57534E] hover:text-[#1C1917]"
-            }`}
-          >
-            📝 Fast-Input / Điểm Danh Demo
-          </button>
-        </div>
-
-        {/* SECTION 1: STATE MATRIX §32 FULL VERIFICATION */}
-        {activeTab === "matrix" && (
-          <section className="space-y-8 animate-in fade-in duration-200">
-            <div className="bg-white p-5 sm:p-6 rounded-[14px] border border-[#E7E5E4] shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#E7E5E4] gap-2">
-                <div>
-                  <h2 className="text-[18px] sm:text-[20px] font-bold text-[#1C1917] flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-[#B4232C]" />
-                    State Matrix Verification (§32)
-                  </h2>
-                  <p className="text-[14px] text-[#78716C]">
-                    Kiểm chứng trực quan mọi trạng thái: Default, Hover, Focus, Active, Disabled, Loading, Error.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBtnLoading(!btnLoading)}
+            <span className="text-[#A8A29E] text-[12px] hidden sm:inline">Vai trò:</span>
+            <div className="flex items-center bg-[#292524] rounded-lg p-0.5 border border-[#44403C]">
+              {(["ADMIN", "GLV", "PARENT", "STUDENT"] as UserRole[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => handleRoleChange(r)}
+                  className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+                    role === r
+                      ? "bg-[#B4232C] text-white shadow-xs"
+                      : "text-[#A8A29E] hover:text-white"
+                  }`}
                 >
-                  {btnLoading ? "Tắt Loading Test" : "Bật Loading Test"}
-                </Button>
-              </div>
-
-              {/* 1. BUTTON STATES */}
-              <div className="mt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="primary">1. Button (§4)</Badge>
-                  <span className="text-[13px] text-[#78716C]">
-                    5 variants · 4 sizes (sm, md, lg, parent) · loading giữ nguyên kích thước
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-[#FAFAF9] p-4 rounded-[12px] border border-[#E7E5E4]">
-                  {/* Default & Hover/Active */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[12px] font-semibold text-[#78716C] uppercase">Default / Hover / Active</span>
-                    <Button variant="primary" size="md" leftIcon={<Plus className="w-4 h-4" />}>
-                      Lưu điểm danh (Primary)
-                    </Button>
-                    <Button variant="secondary" size="md">
-                      Hủy bỏ (Secondary)
-                    </Button>
-                    <Button variant="outline" size="md">
-                      Nhập từ Excel (Outline)
-                    </Button>
-                    <Button variant="ghost" size="md">
-                      Xem chi tiết (Ghost)
-                    </Button>
-                    <Button variant="danger" size="md" leftIcon={<Trash2 className="w-4 h-4" />}>
-                      Xóa học sinh (Danger)
-                    </Button>
-                  </div>
-
-                  {/* Loading State: Giữ nguyên kích thước */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[12px] font-semibold text-[#78716C] uppercase">Loading (Giữ nguyên kích thước)</span>
-                    <Button variant="primary" size="md" loading={true}>
-                      Lưu điểm danh (Primary)
-                    </Button>
-                    <Button variant="secondary" size="md" loading={true}>
-                      Hủy bỏ (Secondary)
-                    </Button>
-                    <Button variant="outline" size="md" loading={true}>
-                      Nhập từ Excel (Outline)
-                    </Button>
-                    <Button variant="danger" size="md" loading={true}>
-                      Xóa học sinh (Danger)
-                    </Button>
-                  </div>
-
-                  {/* Disabled State & Sizes */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[12px] font-semibold text-[#78716C] uppercase">Disabled & Role Sizes</span>
-                    <Button variant="primary" size="md" disabled>
-                      Đã vô hiệu hóa (Disabled)
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Size SM (36px compact)
-                    </Button>
-                    <Button variant="primary" size="lg" rightIcon={<ArrowRight className="w-4 h-4" />}>
-                      Size LG (52px GLV fast)
-                    </Button>
-                    <Button variant="primary" size="parent" fullWidth>
-                      Size PARENT (56px Phụ huynh)
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <Divider className="my-6" />
-
-              {/* 2. ICONBUTTON STATES */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="primary">2. IconButton (§5)</Badge>
-                  <span className="text-[13px] text-[#78716C]">
-                    Bắt buộc có aria-label · Touch target ≥ 44×44px · Notification/More/Close/Back/Edit/Delete
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-4 bg-[#FAFAF9] p-4 rounded-[12px] border border-[#E7E5E4]">
-                  <div className="flex items-center gap-2">
-                    <IconButton aria-label="Thông báo mới" variant="outline">
-                      <Bell className="w-5 h-5 text-[#B4232C]" />
-                    </IconButton>
-                    <IconButton aria-label="Tùy chọn khác" variant="ghost">
-                      <MoreVertical className="w-5 h-5" />
-                    </IconButton>
-                    <IconButton aria-label="Đóng bảng" variant="ghost">
-                      <X className="w-5 h-5" />
-                    </IconButton>
-                    <IconButton aria-label="Quay lại trang trước" variant="secondary">
-                      <ArrowLeft className="w-5 h-5" />
-                    </IconButton>
-                    <IconButton aria-label="Chỉnh sửa thông tin" variant="outline">
-                      <Pencil className="w-5 h-5" />
-                    </IconButton>
-                    <IconButton aria-label="Xóa bản ghi" variant="danger">
-                      <Trash2 className="w-5 h-5" />
-                    </IconButton>
-                  </div>
-
-                  <div className="h-8 w-[1px] bg-[#E7E5E4] hidden sm:block" />
-
-                  {/* Loading & Disabled */}
-                  <div className="flex items-center gap-2">
-                    <IconButton aria-label="Đang tải" loading variant="primary" />
-                    <IconButton aria-label="Nút bị khóa" disabled variant="outline">
-                      <Pencil className="w-5 h-5" />
-                    </IconButton>
-                    <IconButton aria-label="Nút cho phụ huynh" size="parent" variant="primary">
-                      <Bell className="w-6 h-6" />
-                    </IconButton>
-                  </div>
-                </div>
-              </div>
-
-              <Divider className="my-6" />
-
-              {/* 3. INPUT & NUMERIC INPUT STATES */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="primary">3. Input & NumericInput (§6, §7)</Badge>
-                  <span className="text-[13px] text-[#78716C]">
-                    Interface §6 · Mobile keyboard · Validate range · Không tự làm tròn
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 bg-[#FAFAF9] p-4 rounded-[12px] border border-[#E7E5E4]">
-                  {/* Default Input */}
-                  <Input
-                    label="Họ và tên học sinh"
-                    placeholder="Ví dụ: Maria Nguyễn Thị Mai"
-                    value={textValue}
-                    required
-                    helperText="Nhập đầy đủ tên thánh, họ và tên đệm"
-                    leftIcon={<GraduationCap className="w-5 h-5" />}
-                    onChange={setTextValue}
-                  />
-
-                  {/* Input with Error State */}
-                  <Input
-                    label="Email phụ huynh"
-                    placeholder="parent@example.com"
-                    value={errorInputVal}
-                    error="Địa chỉ email chưa đúng định dạng"
-                    leftIcon={<Mail className="w-5 h-5" />}
-                    onChange={setErrorInputVal}
-                  />
-
-                  {/* Disabled & ReadOnly */}
-                  <Input
-                    label="Mã định danh GLV (Read-only)"
-                    value="GLV-KT-2026-08"
-                    readOnly
-                    helperText="Mã tự sinh bởi hệ thống"
-                    onChange={() => {}}
-                  />
-
-                  {/* NumericInput - Valid score */}
-                  <NumericInput
-                    label="Điểm Giáo Lý (Thang 0–10)"
-                    value={numericScore}
-                    min={0}
-                    max={10}
-                    step={0.5}
-                    helperText="Hỗ trợ số lẻ (VD: 8.5, 7.25), không tự làm tròn"
-                    onChange={setNumericScore}
-                  />
-
-                  {/* NumericInput - Out of range error */}
-                  <NumericInput
-                    label="Điểm chuyên cần (Thử nhập > 10)"
-                    value={outOfRangeScore}
-                    min={0}
-                    max={10}
-                    step={0.5}
-                    onChange={setOutOfRangeScore}
-                  />
-
-                  {/* NumericInput - Disabled */}
-                  <NumericInput
-                    label="Điểm đã khóa kỳ trước"
-                    value={9.0}
-                    disabled
-                    helperText="Đã nộp lên Ban Giáo Lý"
-                    onChange={() => {}}
-                  />
-                </div>
-              </div>
-
-              <Divider className="my-6" />
-
-              {/* 4. SELECT RESPONSIVE STATES */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="primary">4. Select (§8)</Badge>
-                  <span className="text-[13px] text-[#78716C]">
-                    Desktop dùng Dropdown · Mobile mở BottomSheet với touch-target ≥ 48px
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#FAFAF9] p-4 rounded-[12px] border border-[#E7E5E4]">
-                  <Select
-                    label="Chọn lớp học (Thử mở trên desktop hoặc mobile)"
-                    value={selectedClass}
-                    options={classOptions}
-                    helperText="Chuyển đổi viewport < 768px để thấy BottomSheet trượt lên"
-                    onChange={setSelectedClass}
-                  />
-
-                  <Select
-                    label="Lớp học bị lỗi hoặc khóa"
-                    value=""
-                    options={classOptions}
-                    placeholder="Chưa chọn lớp"
-                    error="Vui lòng chọn một lớp học để tiếp tục"
-                    onChange={() => {}}
-                  />
-                </div>
-              </div>
-
-              <Divider className="my-6" />
-
-              {/* 5. CHECKBOX & RADIO STATES */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="primary">5. Checkbox & Radio (§9)</Badge>
-                  <span className="text-[13px] text-[#78716C]">
-                    Đủ 5 state: UNCHECKED / CHECKED / INDETERMINATE / DISABLED / FOCUS
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#FAFAF9] p-4 rounded-[12px] border border-[#E7E5E4]">
-                  {/* Checkbox States */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[13px] font-semibold text-[#1C1917] mb-1">Checkbox States</span>
-                    <Checkbox
-                      checked={chkUnchecked}
-                      label="Unchecked State"
-                      description="Học sinh chưa hoàn thành bài tập"
-                      onChange={setChkUnchecked}
-                    />
-                    <Checkbox
-                      checked={chkChecked}
-                      label="Checked State"
-                      description="Đã tham dự Thánh Lễ Chúa Nhật"
-                      onChange={setChkChecked}
-                    />
-                    <Checkbox
-                      indeterminate={chkIndeterminate}
-                      label="Indeterminate State"
-                      description="Chọn một phần học sinh trong lớp"
-                      onChange={() => setChkIndeterminate(!chkIndeterminate)}
-                    />
-                    <Checkbox
-                      disabled
-                      checked={true}
-                      label="Disabled Checked State"
-                      description="Điểm danh đã được chốt bởi Admin"
-                      onChange={() => {}}
-                    />
-                  </div>
-
-                  {/* Radio Group States */}
-                  <div>
-                    <RadioGroup
-                      name="role-test"
-                      label="Phân quyền người dùng (Radio States)"
-                      value={radioRole}
-                      options={[
-                        { value: "admin", label: "Quản trị viên (Admin)", description: "Toàn quyền quản lý giáo phận / xứ" },
-                        { value: "glv", label: "Giáo lý viên (GLV)", description: "Quản lý điểm danh và nhập điểm lớp" },
-                        { value: "parent", label: "Phụ huynh / Học sinh", description: "Xem bảng điểm, thông báo và lịch học" },
-                        { value: "guest", label: "Tài khoản khách (Disabled)", disabled: true },
-                      ]}
-                      onChange={setRadioRole}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Divider className="my-6" />
-
-              {/* 6. BADGE, AVATAR, SPINNER */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="primary">6. Badge, Avatar, Divider, Spinner (§9)</Badge>
-                </div>
-
-                <div className="space-y-4 bg-[#FAFAF9] p-4 rounded-[12px] border border-[#E7E5E4]">
-                  {/* Badges */}
-                  <div>
-                    <span className="text-[12px] font-semibold text-[#78716C] uppercase block mb-2">
-                      Badge Variants: neutral | primary | success | warning | error | info | gold
-                    </span>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="neutral">Neutral</Badge>
-                      <Badge variant="primary" dot>Primary Red</Badge>
-                      <Badge variant="success" dot>Có mặt (Success)</Badge>
-                      <Badge variant="warning" dot>Có phép (Warning)</Badge>
-                      <Badge variant="error" dot>Vắng mặt (Error)</Badge>
-                      <Badge variant="info">Thông tin (Info)</Badge>
-                      <Badge variant="gold" icon="★">Huy hiệu Vàng (Gold)</Badge>
-                    </div>
-                  </div>
-
-                  {/* Avatars */}
-                  <div>
-                    <span className="text-[12px] font-semibold text-[#78716C] uppercase block mb-2">
-                      Avatar: Initials Fallback (Không hiển thị ảnh vỡ) · Status · Role Badges
-                    </span>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <Avatar name="Nguyễn Văn An" roleBadge="ADMIN" status="online" size="xl" />
-                      <Avatar name="Trần Thị Bình" roleBadge="GLV" status="busy" size="lg" />
-                      <Avatar name="Lê Minh Cúc" roleBadge="HS" status="away" size="md" />
-                      <Avatar name="Phạm Đức Dũng" roleBadge="PH" status="offline" size="sm" />
-                      {/* Simulating broken image */}
-                      <Avatar
-                        src="https://invalid-broken-url.example/test.jpg"
-                        name="Hoàng Gia Bảo"
-                        size="lg"
-                        status="online"
-                      />
-                      <Avatar size="md" />
-                    </div>
-                  </div>
-
-                  {/* Spinners */}
-                  <div>
-                    <span className="text-[12px] font-semibold text-[#78716C] uppercase block mb-2">
-                      Spinner Sizes & Colors
-                    </span>
-                    <div className="flex items-center gap-4">
-                      <Spinner size="xs" color="primary" />
-                      <Spinner size="sm" color="primary" />
-                      <Spinner size="md" color="primary" />
-                      <Spinner size="lg" color="gold" />
-                      <Spinner size="xl" color="neutral" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* SECTION 2: FAST INPUT REAL-WORLD SIMULATION */}
-        {activeTab === "form" && (
-          <section className="bg-white p-5 sm:p-6 rounded-[14px] border border-[#E7E5E4] shadow-xs space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E7E5E4]">
-              <div>
-                <h2 className="text-[18px] font-bold text-[#1C1917] flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-[#B4232C]" />
-                  Mô phỏng Thao tác GLV: Điểm danh & Nhập điểm nhanh
-                </h2>
-                <p className="text-[13px] text-[#78716C]">
-                  Được thiết kế theo nguyên tắc Fast-Input và Touch-first (touch-target ≥ 48px).
-                </p>
-              </div>
-              <Badge variant="success" dot>25/28 Đã nhập</Badge>
-            </div>
-
-            {/* Quick Controls */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Select
-                label="Lớp học"
-                value={selectedClass}
-                options={classOptions}
-                onChange={setSelectedClass}
-              />
-              <Select
-                label="Môn học"
-                value="gl"
-                options={[
-                  { value: "gl", label: "Giáo lý Hồng Ân" },
-                  { value: "kt", label: "Kinh Thánh Tân Ước" },
-                ]}
-                onChange={() => {}}
-              />
-              <Select
-                label="Loại điểm"
-                value="gk"
-                options={[
-                  { value: "15p", label: "Kiểm tra 15 phút" },
-                  { value: "gk", label: "Điểm thi Giữa kỳ" },
-                  { value: "ck", label: "Điểm thi Cuối kỳ" },
-                ]}
-                onChange={() => {}}
-              />
-            </div>
-
-            <Divider label="Danh sách học sinh & Nhập điểm" />
-
-            {/* Student Score Row Simulation */}
-            <div className="space-y-3">
-              {[
-                { id: "1", code: "01", name: "Maria Nguyễn Văn An", oldScore: 8.0, current: 8.5 },
-                { id: "2", code: "02", name: "Giuse Trần Văn Bình", oldScore: 7.5, current: null },
-                { id: "3", code: "03", name: "Têrêsa Lê Minh Cúc", oldScore: 9.0, current: 9.5 },
-              ].map((student) => (
-                <div
-                  key={student.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-[12px] bg-[#FAFAF9] border border-[#E7E5E4] gap-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-[13px] font-bold text-[#78716C] w-6 text-center">
-                      {student.code}
-                    </span>
-                    <Avatar name={student.name} size="md" status="online" />
-                    <div>
-                      <div className="text-[15px] font-semibold text-[#1C1917]">
-                        {student.name}
-                      </div>
-                      <div className="text-[12px] text-[#78716C]">
-                        Điểm cũ: {student.oldScore}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 self-end sm:self-center">
-                    <div className="w-28">
-                      <NumericInput
-                        placeholder="0.0"
-                        size="md"
-                        min={0}
-                        max={10}
-                        value={student.current}
-                        onChange={() => {}}
-                      />
-                    </div>
-                    <Badge variant={student.current ? "success" : "neutral"} size="sm">
-                      {student.current ? "Đã nhập" : "Chưa có"}
-                    </Badge>
-                  </div>
-                </div>
+                  {r}
+                </button>
               ))}
             </div>
 
-            {/* Sticky Save Bar Simulation (§31) */}
-            <div className="sticky bottom-4 z-30 flex items-center justify-between p-4 bg-white rounded-[12px] border border-[#E7E5E4] shadow-md">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#E3B341]" />
-                <span className="text-[14px] font-semibold text-[#292524]">
-                  Có thay đổi chưa lưu
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="md">
-                  Đặt lại
-                </Button>
-                <Button variant="primary" size="md" leftIcon={<CheckCircle className="w-4 h-4" />}>
-                  Lưu điểm số
-                </Button>
-              </div>
+            {/* Auth Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isAuthenticated) {
+                  logout();
+                  toast.warning("Đã đăng xuất tài khoản!");
+                } else {
+                  login(role);
+                  toast.success(`Đã đăng nhập với vai trò ${role}`);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold transition-colors cursor-pointer border ${
+                isAuthenticated
+                  ? "bg-[#168154]/20 border-[#168154] text-[#D1FAE5] hover:bg-[#168154]/30"
+                  : "bg-[#DC4C4C]/20 border-[#DC4C4C] text-[#FEE2E2] hover:bg-[#DC4C4C]/30"
+              }`}
+            >
+              {isAuthenticated ? <LogOut className="w-3.5 h-3.5" /> : <LogIn className="w-3.5 h-3.5" />}
+              <span>{isAuthenticated ? "Đăng xuất" : "Đăng nhập"}</span>
+            </button>
+
+            {/* Viewport Simulator Button */}
+            <div className="hidden lg:flex items-center bg-[#292524] rounded-lg p-0.5 border border-[#44403C] ml-2">
+              <button
+                type="button"
+                onClick={() => setViewportMode("desktop")}
+                title="Desktop (Header + Sidebar + Content)"
+                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                  viewportMode === "desktop" ? "bg-[#44403C] text-white" : "text-[#A8A29E]"
+                }`}
+              >
+                <Monitor className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewportMode("mobile_sim")}
+                title="Mô phỏng Mobile 375px (Header + Content + MobileBottomNav)"
+                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                  viewportMode === "mobile_sim" ? "bg-[#44403C] text-white" : "text-[#A8A29E]"
+                }`}
+              >
+                <Smartphone className="w-4 h-4" />
+              </button>
             </div>
-          </section>
-        )}
+          </div>
+        </div>
+      </div>
 
-        {/* SECTION 3: COMPONENT CATALOG */}
-        {activeTab === "all" && (
-          <section className="space-y-6">
-            <div className="bg-white p-5 rounded-[14px] border border-[#E7E5E4]">
-              <h2 className="text-[18px] font-bold text-[#1C1917] mb-2 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-[#B4232C]" />
-                Danh mục Primitive Tier 1
-              </h2>
-              <p className="text-[14px] text-[#78716C] mb-4">
-                Toàn bộ 11 primitives đã được sinh hoàn chỉnh theo tiêu chuẩn presentational thuần túy: props-in, event-out qua on+Verb, không side-effect.
-              </p>
+      {/* Sub-header Navigation Tabs for Testing */}
+      <div className="bg-white border-b border-[#E7E5E4] px-4 py-2 sm:px-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab("showcase")}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === "showcase"
+                  ? "bg-[#FFF1F2] text-[#B4232C]"
+                  : "text-[#57534E] hover:text-[#1C1917]"
+              }`}
+            >
+              🏛️ AppShell & Layout Live Preview
+            </button>
+            <button
+              onClick={() => setActiveTab("matrix")}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === "matrix"
+                  ? "bg-[#FFF1F2] text-[#B4232C]"
+                  : "text-[#57534E] hover:text-[#1C1917]"
+              }`}
+            >
+              📑 Bảng Route → Role Mapping (§19)
+            </button>
+            <button
+              onClick={() => setActiveTab("guard_test")}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                activeTab === "guard_test"
+                  ? "bg-[#FFF1F2] text-[#B4232C]"
+                  : "text-[#57534E] hover:text-[#1C1917]"
+              }`}
+            >
+              🛡️ RouteGuard & PermissionGate Tests (§7, §29)
+            </button>
+          </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  "Button",
-                  "IconButton",
-                  "Input",
-                  "NumericInput",
-                  "Select",
-                  "Checkbox",
-                  "Radio",
-                  "Badge",
-                  "Avatar",
-                  "Divider",
-                  "Spinner",
-                ].map((name) => (
-                  <div
-                    key={name}
-                    className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-center"
-                  >
-                    <div className="text-[15px] font-bold text-[#B4232C]">{name}</div>
-                    <div className="text-[12px] text-[#78716C]">Tier 1 Primitive</div>
+          {/* Quick Route Switcher */}
+          <div className="flex items-center gap-1.5 text-[12px] flex-shrink-0">
+            <span className="text-[#78716C]">Route:</span>
+            <span className="font-mono bg-[#FAFAF9] px-2 py-0.5 rounded border border-[#E7E5E4] text-[#B4232C] font-semibold">
+              {currentPath}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ===================================================================== */}
+      {/* TAB 1: APPSHELL SHOWCASE */}
+      {/* ===================================================================== */}
+      {activeTab === "showcase" && (
+        <div className="flex-1 flex justify-center p-2 sm:p-4">
+          <div
+            className={`w-full transition-all duration-300 ${
+              viewportMode === "mobile_sim"
+                ? "max-w-[390px] shadow-2xl rounded-[32px] overflow-hidden border-8 border-[#292524] bg-white my-4 min-h-[780px]"
+                : "max-w-full"
+            }`}
+          >
+            {/* The AppShell receives prop role: UserRole */}
+            <AppShell
+              role={role}
+              user={user || undefined}
+              title={
+                currentPath.includes("admin")
+                  ? "Admin Dashboard"
+                  : currentPath.includes("teacher")
+                  ? "Không gian GLV"
+                  : "Học tập & Điểm số"
+              }
+              currentPath={currentPath}
+              onNavigate={handleNavigate}
+              notificationCount={role === "ADMIN" ? 3 : role === "GLV" ? 2 : 1}
+              breadcrumbs={getBreadcrumbs(currentPath)}
+              showBackButton={currentPath !== ROLE_DEFAULT_PATHS[role]}
+              onBack={() => handleNavigate(ROLE_DEFAULT_PATHS[role])}
+              headerActions={
+                <Badge variant="gold" icon="★">
+                  {role === "ADMIN" ? "Quản trị đoàn" : role === "GLV" ? "Lớp Rước Lễ 1" : "Maria Mai"}
+                </Badge>
+              }
+            >
+              {/* Wrapped in RouteGuard (§7) */}
+              <RouteGuard
+                allowedRoles={currentRouteMeta.allowedRoles}
+                requiredPermission={currentRouteMeta.requiredPermission}
+                currentPath={currentPath}
+                onNavigate={handleNavigate}
+              >
+                <div className="space-y-6">
+                  {/* Banner / Current Context */}
+                  <div className="p-4 sm:p-5 rounded-[14px] bg-white border border-[#E7E5E4] shadow-xs space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#F5F5F4]">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="primary">{currentRouteMeta.name}</Badge>
+                        <span className="text-[12px] text-[#78716C] font-mono">{currentPath}</span>
+                      </div>
+                      <Badge variant="success" dot>
+                        RouteGuard: Hợp lệ ({role})
+                      </Badge>
+                    </div>
+
+                    <p className="text-[14px] text-[#57534E]">
+                      {currentRouteMeta.notes}
+                    </p>
+
+                    {/* Quick navigation buttons inside content */}
+                    <div className="pt-2 flex flex-wrap gap-2">
+                      <span className="text-[12px] font-semibold text-[#78716C] flex items-center mr-1">
+                        Chuyển nhanh trang:
+                      </span>
+                      {ROUTE_ROLE_MAPPINGS.map((item) => (
+                        <button
+                          key={item.route}
+                          type="button"
+                          onClick={() => handleNavigate(item.route)}
+                          className={`px-2.5 py-1 text-[12px] font-medium rounded-[6px] border transition-colors cursor-pointer ${
+                            currentPath === item.route
+                              ? "bg-[#B4232C] text-white border-[#B4232C]"
+                              : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]"
+                          }`}
+                        >
+                          {item.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
+
+                  {/* Sample KPI Cards in AppShell */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard
+                      title="Tổng học sinh"
+                      value={128}
+                      icon={<Users className="w-5 h-5" />}
+                      trend="+5 tháng này"
+                      trendType="positive"
+                    />
+                    <StatCard
+                      title="Chuyên cần đoàn"
+                      value="94.2%"
+                      icon={<CheckSquare className="w-5 h-5" />}
+                      trend="+1.2%"
+                      trendType="positive"
+                    />
+                    <StatCard
+                      title="Điểm TB khối"
+                      value="8.4"
+                      icon={<FileSpreadsheet className="w-5 h-5" />}
+                      trend="Kỳ I"
+                      trendType="neutral"
+                    />
+                    <StatCard
+                      title="Cảnh báo vắng"
+                      value="3 em"
+                      icon={<ShieldAlert className="w-5 h-5" />}
+                      subtitle="Vắng > 2 buổi"
+                      trendType="negative"
+                    />
+                  </div>
+
+                  {/* PermissionGate Demo Cards */}
+                  <div className="p-4 sm:p-5 rounded-[14px] bg-white border border-[#E7E5E4] shadow-xs space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#F5F5F4]">
+                      <div>
+                        <h3 className="font-bold text-[16px] text-[#1C1917] font-serif">
+                          PermissionGate (§29) · Thao tác nghiệp vụ theo quyền
+                        </h3>
+                        <p className="text-[12px] text-[#78716C] mt-0.5">
+                          Các nút bên dưới tự động ẩn/hiện hoặc fallback dựa theo quyền thực tế của role ({role})
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {/* Permission: attendance:update */}
+                      <PermissionGate
+                        permission="attendance:update"
+                        fallback={
+                          <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-[#A8A29E]" />
+                            <span>Khóa: attendance:update</span>
+                          </div>
+                        }
+                      >
+                        <div className="p-3 rounded-[10px] bg-[#ECFDF3] border border-[#A7F3D0] flex items-center justify-between">
+                          <div className="text-[13px] font-semibold text-[#168154]">
+                            ✅ Điểm danh hôm nay
+                          </div>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => toast.success("Đã mở màn hình Điểm danh nhanh")}
+                          >
+                            Thực hiện
+                          </Button>
+                        </div>
+                      </PermissionGate>
+
+                      {/* Permission: score:export */}
+                      <PermissionGate
+                        permission="score:export"
+                        fallback={
+                          <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-[#A8A29E]" />
+                            <span>Khóa: score:export</span>
+                          </div>
+                        }
+                      >
+                        <div className="p-3 rounded-[10px] bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between">
+                          <div className="text-[13px] font-semibold text-[#1D4ED8]">
+                            📊 Xuất file Excel điểm
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Download className="w-3.5 h-3.5 text-[#1D4ED8]" />}
+                            onClick={() => toast.info("Đang kết xuất báo cáo Excel...")}
+                          >
+                            Xuất
+                          </Button>
+                        </div>
+                      </PermissionGate>
+
+                      {/* Permission: user:delete */}
+                      <PermissionGate
+                        permission="user:delete"
+                        fallback={
+                          <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-[#A8A29E]" />
+                            <span>Khóa: user:delete (Chỉ Admin)</span>
+                          </div>
+                        }
+                      >
+                        <div className="p-3 rounded-[10px] bg-[#FEF2F2] border border-[#FECDD3] flex items-center justify-between">
+                          <div className="text-[13px] font-semibold text-[#C73A3A]">
+                            🗑️ Xóa tài khoản
+                          </div>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                            onClick={() => toast.error("Đã kích hoạt quyền xóa người dùng")}
+                          >
+                            Xóa
+                          </Button>
+                        </div>
+                      </PermissionGate>
+                    </div>
+                  </div>
+                </div>
+              </RouteGuard>
+            </AppShell>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB 2: ROUTE TO ROLE MAPPING TABLE (§19 NAVIGATION CONTRACT) */}
+      {/* ===================================================================== */}
+      {activeTab === "matrix" && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 w-full">
+          <div className="bg-white p-5 sm:p-6 rounded-[14px] border border-[#E7E5E4] shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#F5F5F4]">
+              <div>
+                <h2 className="text-[20px] font-bold text-[#1C1917] font-serif">
+                  Bảng Route → Role Mapping Contract (§2, §7, §14, §19)
+                </h2>
+                <p className="text-[13px] text-[#78716C] mt-1">
+                  Định nghĩa rõ quyền hạn truy cập từng route, vai trò tương ứng và luồng RouteGuard.
+                </p>
               </div>
+              <Badge variant="primary">Navigation Contract §19</Badge>
             </div>
-          </section>
-        )}
-      </main>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px] text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-[#E7E5E4] bg-[#FAFAF9] text-[#57534E]">
+                    <th className="py-3 px-4 font-semibold">Route Path</th>
+                    <th className="py-3 px-4 font-semibold">Tên Màn Hình</th>
+                    <th className="py-3 px-4 font-semibold">Vai Trò Được Phép</th>
+                    <th className="py-3 px-4 font-semibold">Yêu Cầu Quyền (§29)</th>
+                    <th className="py-3 px-4 font-semibold">Mô Tả & Ghi Chú</th>
+                    <th className="py-3 px-4 font-semibold text-right">Thử Nghiệm</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F5F5F4]">
+                  {ROUTE_ROLE_MAPPINGS.map((mapping) => {
+                    const isAllowed = mapping.allowedRoles.includes(role);
+                    return (
+                      <tr
+                        key={mapping.route}
+                        className={`hover:bg-[#FAFAF9] transition-colors ${
+                          currentPath === mapping.route ? "bg-[#FFF1F2]/50" : ""
+                        }`}
+                      >
+                        <td className="py-3 px-4 font-mono font-bold text-[#B4232C]">
+                          {mapping.route}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-[#1C1917]">
+                          {mapping.name}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {mapping.allowedRoles.map((r) => (
+                              <span
+                                key={r}
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                  r === "ADMIN"
+                                    ? "bg-[#FFF1F2] text-[#B4232C]"
+                                    : r === "GLV"
+                                    ? "bg-[#FFFBEB] text-[#8B6419]"
+                                    : "bg-[#EFF6FF] text-[#1D4ED8]"
+                                }`}
+                              >
+                                {r}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[12px] text-[#57534E]">
+                          {mapping.requiredPermission ? (
+                            <Badge variant="neutral" size="sm">
+                              {mapping.requiredPermission}
+                            </Badge>
+                          ) : (
+                            <span className="text-[#A8A29E]">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-[#57534E] max-w-xs">
+                          {mapping.notes}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <Button
+                            variant={isAllowed ? "primary" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              handleNavigate(mapping.route);
+                              setActiveTab("showcase");
+                            }}
+                          >
+                            {isAllowed ? "Truy cập" : "Thử chặn (403)"}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB 3: ROUTEGUARD & PERMISSIONGATE INTERACTIVE TESTING */}
+      {/* ===================================================================== */}
+      {activeTab === "guard_test" && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 w-full">
+          {/* Permission Matrix Checker for Current Role */}
+          <div className="bg-white p-5 sm:p-6 rounded-[14px] border border-[#E7E5E4] shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#F5F5F4] gap-2">
+              <div>
+                <h3 className="text-[18px] font-bold text-[#1C1917] font-serif">
+                  Trình Kiểm Tra Quyền (§29) theo Vai Trò ({role})
+                </h3>
+                <p className="text-[13px] text-[#78716C] mt-0.5">
+                  Kiểm tra trực tiếp hàm `hasPermission("resource:action")` trên tầng Auth Layer.
+                </p>
+              </div>
+              <Badge variant={role === "ADMIN" ? "primary" : role === "GLV" ? "gold" : "info"}>
+                Đang đăng nhập: {role}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {PERMISSION_TEST_KEYS.map(({ key, label }) => {
+                const allowed = hasPermission(key);
+                return (
+                  <div
+                    key={key}
+                    className={`p-3.5 rounded-[12px] border transition-all flex items-start gap-2.5 ${
+                      allowed
+                        ? "bg-[#ECFDF3] border-[#A7F3D0] text-[#146C47]"
+                        : "bg-[#FAFAF9] border-[#E7E5E4] text-[#A8A29E] opacity-75"
+                    }`}
+                  >
+                    <div className="mt-0.5">
+                      {allowed ? (
+                        <ShieldCheck className="w-5 h-5 text-[#168154]" />
+                      ) : (
+                        <Lock className="w-5 h-5 text-[#A8A29E]" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[13px] truncate">{label}</div>
+                      <div className="text-[11px] mt-0.5 font-bold uppercase">
+                        {allowed ? "ĐƯỢC PHÉP" : "BỊ TỪ CHỐI"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 403 Forbidden Component Test */}
+          <div className="bg-white p-5 sm:p-6 rounded-[14px] border border-[#E7E5E4] shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#F5F5F4]">
+              <div>
+                <h3 className="text-[18px] font-bold text-[#1C1917] font-serif">
+                  Kiểm Thử Màn Hình Lỗi 403 Forbidden (§7)
+                </h3>
+                <p className="text-[13px] text-[#78716C] mt-0.5">
+                  Đúng câu từ quy định: "Bạn không có quyền truy cập trang này." + nút "Quay về trang chủ"
+                </p>
+              </div>
+              <Badge variant="warning">Mẫu hiển thị 403 tiêu chuẩn</Badge>
+            </div>
+
+            <Forbidden403
+              role={role}
+              message="Bạn không có quyền truy cập trang này."
+              onGoHome={(home) => {
+                handleNavigate(home);
+                toast.success(`Đã quay về trang chủ theo vai trò: ${home}`);
+                setActiveTab("showcase");
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AuthProvider initialRole="ADMIN" initialAuth={true}>
+        <Phase3Showcase />
+      </AuthProvider>
+    </ToastProvider>
   );
 }
