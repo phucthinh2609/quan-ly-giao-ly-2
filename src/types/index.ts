@@ -237,3 +237,96 @@ export interface AppShellProps {
   breadcrumbs?: BreadcrumbItem[];
   headerActions?: ReactNode;
 }
+
+// ============================================================================
+// DOMAIN: NOTIFICATIONS (§24, §30, Wireframe §11)
+// ============================================================================
+
+export type NotificationType =
+  | "URGENT"
+  | "STUDENT"
+  | "CLASS"
+  | "GENERAL"
+  | "SYSTEM";
+
+export interface NotificationData {
+  id: string;
+  type: NotificationType;
+  title: string;
+  preview: string;
+  content: string;
+  timestamp: string;
+  formattedDate?: string;
+  isRead: boolean;
+  studentId?: string;
+  studentName?: string;
+  className?: string;
+  actionLabel?: string;
+  actionPath?: string;
+}
+
+// Priority rank for sorting: URGENT (1) -> STUDENT (2) -> CLASS (3) -> GENERAL (4) -> SYSTEM (5)
+export const NOTIFICATION_TYPE_PRIORITY: Record<NotificationType, number> = {
+  URGENT: 1,
+  STUDENT: 2,
+  CLASS: 3,
+  GENERAL: 4,
+  SYSTEM: 5,
+};
+
+// ============================================================================
+// DOMAIN: PARENT & GRADE OVERVIEW (§27, §30, Wireframe C)
+// ============================================================================
+
+export type AcademicPeriod = "HK1" | "HK2" | "FULL_YEAR";
+
+export interface AcademicPeriodOption {
+  id: AcademicPeriod;
+  label: string;
+  academicYear: string;
+}
+
+export interface LinkedStudent {
+  id: string;
+  name: string;
+  christianName?: string;
+  className: string;
+  code: string;
+  avatarUrl?: string | null;
+  grade?: string;
+}
+
+export interface SubjectScoreSummary {
+  subjectId: string;
+  subjectName: string;
+  icon: string; // e.g. "📖", "✝️", "🕊️"
+  averageScore: number;
+  midtermScore: number | null; // GK
+  finalScore: number | null; // CK
+  oralScore?: number | null; // Miệng
+  quizScore?: number | null; // 15 phút
+  comment?: string;
+}
+
+export interface ParentAttendanceSummary {
+  totalSessions: number;
+  attendedSessions: number;
+  absentSessions: number;
+  excusedSessions: number;
+  attendanceRate: number; // e.g. 90%
+}
+
+export interface StudentAcademicReport {
+  studentId: string;
+  period: AcademicPeriod;
+  periodLabel: string;
+  academicYear: string;
+  gpa: number;
+  rankLabel: string; // "Xuất sắc", "Tốt", "Khá", "Đạt"
+  rankColor?: "gold" | "success" | "neutral";
+  subjects: SubjectScoreSummary[];
+  teacherComment: string;
+  teacherName: string;
+  attendance: ParentAttendanceSummary;
+}
+

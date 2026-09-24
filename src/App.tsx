@@ -15,6 +15,8 @@ import {
 } from "./components/ui";
 import { AttendancePage } from "./components/attendance";
 import { TeacherScoresPage } from "./pages/teacher/scores";
+import { ParentDashboard } from "./pages/parent";
+import { ParentProvider } from "./context/ParentContext";
 import {
   AuthProvider,
   useAuth,
@@ -120,6 +122,13 @@ const ROUTE_ROLE_MAPPINGS: RouteMapping[] = [
     requiredPermission: "attendance:view",
     notes: "Tỷ lệ chuyên cần, danh sách các buổi học Chúa Nhật",
   },
+  {
+    route: "/parent/notifications",
+    name: "Thông báo Xứ đoàn",
+    allowedRoles: ["PARENT", "STUDENT"],
+    requiredPermission: "notification:view",
+    notes: "Thông báo chung, lớp học, học sinh (điểm danh/điểm số) và tin khẩn",
+  },
 ];
 
 // Standard keys from 03_Component_Library.md §29
@@ -140,7 +149,7 @@ function Phase3Showcase() {
   // Navigation simulation state
   const [currentPath, setCurrentPath] = useState<string>(ROLE_DEFAULT_PATHS[role]);
   const [viewportMode, setViewportMode] = useState<"desktop" | "mobile_sim">("desktop");
-  const [activeTab, setActiveTab] = useState<"showcase" | "attendance" | "scores" | "matrix" | "guard_test">("showcase");
+  const [activeTab, setActiveTab] = useState<"showcase" | "attendance" | "scores" | "parent" | "matrix" | "guard_test">("showcase");
 
   // Breadcrumb generator based on current route
   const getBreadcrumbs = (path: string): BreadcrumbItem[] => {
@@ -309,6 +318,21 @@ function Phase3Showcase() {
               <span>Nhập Điểm GLV (Phase 5)</span>
             </button>
             <button
+              onClick={() => {
+                setActiveTab("parent");
+                switchRole("PARENT");
+                handleNavigate("/dashboard");
+              }}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === "parent"
+                  ? "bg-[#B4232C] text-white shadow-xs"
+                  : "bg-[#FFF1F2] text-[#B4232C] hover:bg-[#FFE4E6]"
+              }`}
+            >
+              <span>👨‍👩‍👧</span>
+              <span>Phụ Huynh & Bảng Điểm (Phase 6)</span>
+            </button>
+            <button
               onClick={() => setActiveTab("matrix")}
               className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === "matrix"
@@ -390,6 +414,11 @@ function Phase3Showcase() {
                 ) : currentPath === "/teacher/scores" ? (
                   <TeacherScoresPage
                     onBack={() => handleNavigate(role === "GLV" ? "/teacher/dashboard" : "/admin/dashboard")}
+                  />
+                ) : role === "PARENT" || currentPath === "/dashboard" || currentPath.startsWith("/parent") ? (
+                  <ParentDashboard
+                    currentPath={currentPath}
+                    onNavigate={handleNavigate}
                   />
                 ) : (
                   <div className="space-y-6">
@@ -620,6 +649,28 @@ function Phase3Showcase() {
       )}
 
       {/* ===================================================================== */}
+      {/* TAB: PARENT DASHBOARD & GRADE OVERVIEW (PHASE 6) (§24, §27, §30)       */}
+      {/* ===================================================================== */}
+      {activeTab === "parent" && (
+        <div className="flex-1 flex justify-center p-2 sm:p-4">
+          <div
+            className={`w-full transition-all duration-300 ${
+              viewportMode === "mobile_sim"
+                ? "max-w-[420px] shadow-2xl rounded-[32px] overflow-hidden border-8 border-[#292524] bg-[#FAFAF9] my-4 min-h-[820px]"
+                : "max-w-4xl"
+            }`}
+          >
+            <ParentDashboard
+              currentPath={currentPath}
+              onNavigate={(path) => {
+                handleNavigate(path);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
       {/* TAB 2: ROUTE TO ROLE MAPPING TABLE (§19 NAVIGATION CONTRACT) */}
       {/* ===================================================================== */}
       {activeTab === "matrix" && (
@@ -803,7 +854,9 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider initialRole="ADMIN" initialAuth={true}>
-        <Phase3Showcase />
+        <ParentProvider>
+          <Phase3Showcase />
+        </ParentProvider>
       </AuthProvider>
     </ToastProvider>
   );
