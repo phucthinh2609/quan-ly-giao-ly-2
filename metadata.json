@@ -1,0 +1,8 @@
+{
+  "name": "Quản Lý Giáo Lý - Đoàn Kitô Vua",
+  "description": "Hệ thống Quản lý Học tập Giáo lý - Đoàn Kitô Vua với bảng điểm danh, nhập điểm, bảng điểm học sinh và thông tin phụ huynh.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
