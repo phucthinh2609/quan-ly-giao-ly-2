@@ -11,7 +11,10 @@ import {
   StatCard,
   ToastProvider,
   useToast,
+  KitoVuaLogo,
 } from "./components/ui";
+import { AttendancePage } from "./components/attendance";
+import { TeacherScoresPage } from "./pages/teacher/scores";
 import {
   AuthProvider,
   useAuth,
@@ -31,6 +34,8 @@ import {
   Download,
   LogOut,
   LogIn,
+  CalendarCheck,
+  ArrowRight,
 } from "lucide-react";
 
 // ============================================================================
@@ -135,7 +140,7 @@ function Phase3Showcase() {
   // Navigation simulation state
   const [currentPath, setCurrentPath] = useState<string>(ROLE_DEFAULT_PATHS[role]);
   const [viewportMode, setViewportMode] = useState<"desktop" | "mobile_sim">("desktop");
-  const [activeTab, setActiveTab] = useState<"showcase" | "matrix" | "guard_test">("showcase");
+  const [activeTab, setActiveTab] = useState<"showcase" | "attendance" | "scores" | "matrix" | "guard_test">("showcase");
 
   // Breadcrumb generator based on current route
   const getBreadcrumbs = (path: string): BreadcrumbItem[] => {
@@ -185,13 +190,11 @@ function Phase3Showcase() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-[13px]">
           {/* Brand & Phase indicator */}
           <div className="flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded bg-[#B4232C] text-white flex items-center justify-center font-bold text-xs">
-              ✝
-            </span>
+            <KitoVuaLogo size={26} />
             <span className="font-bold tracking-tight font-serif text-[14px]">
-              Phase 3 Layout & Navigation
+              Quản lý Giáo lý - Đoàn Kitô Vua
             </span>
-            <Badge variant="primary" size="sm">03_Component_Library §10–13, §29</Badge>
+            <Badge variant="primary" size="sm">Gx. Đức Mẹ Hằng Cứu Giúp</Badge>
           </div>
 
           {/* Role Switching Selector */}
@@ -278,6 +281,34 @@ function Phase3Showcase() {
               🏛️ AppShell & Layout Live Preview
             </button>
             <button
+              onClick={() => {
+                setActiveTab("attendance");
+                handleNavigate("/teacher/attendance");
+              }}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === "attendance"
+                  ? "bg-[#B4232C] text-white shadow-xs"
+                  : "bg-[#FFF1F2] text-[#B4232C] hover:bg-[#FFE4E6]"
+              }`}
+            >
+              <span>✅</span>
+              <span>Điểm Danh (Phase 4)</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("scores");
+                handleNavigate("/teacher/scores");
+              }}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === "scores"
+                  ? "bg-[#B4232C] text-white shadow-xs"
+                  : "bg-[#FFF1F2] text-[#B4232C] hover:bg-[#FFE4E6]"
+              }`}
+            >
+              <span>📝</span>
+              <span>Nhập Điểm GLV (Phase 5)</span>
+            </button>
+            <button
               onClick={() => setActiveTab("matrix")}
               className={`px-3 py-1.5 text-[13px] font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === "matrix"
@@ -351,170 +382,240 @@ function Phase3Showcase() {
                 currentPath={currentPath}
                 onNavigate={handleNavigate}
               >
-                <div className="space-y-6">
-                  {/* Banner / Current Context */}
-                  <div className="p-4 sm:p-5 rounded-[14px] bg-white border border-[#E7E5E4] shadow-xs space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#F5F5F4]">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="primary">{currentRouteMeta.name}</Badge>
-                        <span className="text-[12px] text-[#78716C] font-mono">{currentPath}</span>
+                {/* Route: Điểm danh hôm nay (/teacher/attendance) */}
+                {currentPath === "/teacher/attendance" ? (
+                  <AttendancePage
+                    onBack={() => handleNavigate(role === "GLV" ? "/teacher/dashboard" : "/admin/dashboard")}
+                  />
+                ) : currentPath === "/teacher/scores" ? (
+                  <TeacherScoresPage
+                    onBack={() => handleNavigate(role === "GLV" ? "/teacher/dashboard" : "/admin/dashboard")}
+                  />
+                ) : (
+                  <div className="space-y-6">
+                    {/* Banner / Current Context */}
+                    <div className="p-4 sm:p-5 rounded-[14px] bg-white border border-[#E7E5E4] shadow-xs space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#F5F5F4]">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="primary">{currentRouteMeta.name}</Badge>
+                          <span className="text-[12px] text-[#78716C] font-mono">{currentPath}</span>
+                        </div>
+                        <Badge variant="success" dot>
+                          RouteGuard: Hợp lệ ({role})
+                        </Badge>
                       </div>
-                      <Badge variant="success" dot>
-                        RouteGuard: Hợp lệ ({role})
-                      </Badge>
+
+                      <p className="text-[14px] text-[#57534E]">
+                        {currentRouteMeta.notes}
+                      </p>
+
+                      {/* Quick navigation buttons inside content */}
+                      <div className="pt-2 flex flex-wrap gap-2">
+                        <span className="text-[12px] font-semibold text-[#78716C] flex items-center mr-1">
+                          Chuyển nhanh trang:
+                        </span>
+                        {ROUTE_ROLE_MAPPINGS.map((item) => (
+                          <button
+                            key={item.route}
+                            type="button"
+                            onClick={() => handleNavigate(item.route)}
+                            className={`px-2.5 py-1 text-[12px] font-medium rounded-[6px] border transition-colors cursor-pointer ${
+                              currentPath === item.route
+                                ? "bg-[#B4232C] text-white border-[#B4232C]"
+                                : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]"
+                            }`}
+                          >
+                            {item.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    <p className="text-[14px] text-[#57534E]">
-                      {currentRouteMeta.notes}
-                    </p>
-
-                    {/* Quick navigation buttons inside content */}
-                    <div className="pt-2 flex flex-wrap gap-2">
-                      <span className="text-[12px] font-semibold text-[#78716C] flex items-center mr-1">
-                        Chuyển nhanh trang:
-                      </span>
-                      {ROUTE_ROLE_MAPPINGS.map((item) => (
-                        <button
-                          key={item.route}
-                          type="button"
-                          onClick={() => handleNavigate(item.route)}
-                          className={`px-2.5 py-1 text-[12px] font-medium rounded-[6px] border transition-colors cursor-pointer ${
-                            currentPath === item.route
-                              ? "bg-[#B4232C] text-white border-[#B4232C]"
-                              : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-                          }`}
+                    {/* GLV 1-Touch Quick Action Card (Sitemap §8 & Wireframe) */}
+                    {(role === "GLV" || role === "ADMIN") && (
+                      <div className="p-4 sm:p-5 rounded-[16px] bg-gradient-to-r from-[#FFF1F2] via-white to-[#FFFBEB] border border-[#FECDD3] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="primary" dot>Truy cập 1 thao tác GLV</Badge>
+                            <span className="text-[12px] font-bold text-[#B4232C]">Chúa Nhật hôm nay</span>
+                          </div>
+                          <h2 className="text-[17px] sm:text-[19px] font-bold text-[#1C1917] font-serif">
+                            Điểm danh Giáo lý — Lớp Rước Lễ 1A
+                          </h2>
+                          <p className="text-[13px] text-[#57534E]">
+                            Thao tác 1 chạm: Có mặt → Vắng → Có phép → Đi muộn. Lưu nhanh chống mất dữ liệu khi mất mạng.
+                          </p>
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="lg"
+                          leftIcon={<CalendarCheck className="w-5 h-5" />}
+                          rightIcon={<ArrowRight className="w-4 h-4" />}
+                          onClick={() => handleNavigate("/teacher/attendance")}
+                          className="!min-h-[50px] px-6 font-bold shadow-sm cursor-pointer whitespace-nowrap"
                         >
-                          {item.name}
-                        </button>
-                      ))}
+                          Điểm danh hôm nay
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Sample KPI Cards in AppShell */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <StatCard
+                        title="Tổng học sinh"
+                        value={128}
+                        icon={<Users className="w-5 h-5" />}
+                        trend="+5 tháng này"
+                        trendType="positive"
+                      />
+                      <StatCard
+                        title="Chuyên cần đoàn"
+                        value="94.2%"
+                        icon={<CheckSquare className="w-5 h-5" />}
+                        trend="+1.2%"
+                        trendType="positive"
+                      />
+                      <StatCard
+                        title="Điểm TB khối"
+                        value="8.4"
+                        icon={<FileSpreadsheet className="w-5 h-5" />}
+                        trend="Kỳ I"
+                        trendType="neutral"
+                      />
+                      <StatCard
+                        title="Cảnh báo vắng"
+                        value="3 em"
+                        icon={<ShieldAlert className="w-5 h-5" />}
+                        subtitle="Vắng > 2 buổi"
+                        trendType="negative"
+                      />
                     </div>
-                  </div>
 
-                  {/* Sample KPI Cards in AppShell */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard
-                      title="Tổng học sinh"
-                      value={128}
-                      icon={<Users className="w-5 h-5" />}
-                      trend="+5 tháng này"
-                      trendType="positive"
-                    />
-                    <StatCard
-                      title="Chuyên cần đoàn"
-                      value="94.2%"
-                      icon={<CheckSquare className="w-5 h-5" />}
-                      trend="+1.2%"
-                      trendType="positive"
-                    />
-                    <StatCard
-                      title="Điểm TB khối"
-                      value="8.4"
-                      icon={<FileSpreadsheet className="w-5 h-5" />}
-                      trend="Kỳ I"
-                      trendType="neutral"
-                    />
-                    <StatCard
-                      title="Cảnh báo vắng"
-                      value="3 em"
-                      icon={<ShieldAlert className="w-5 h-5" />}
-                      subtitle="Vắng > 2 buổi"
-                      trendType="negative"
-                    />
-                  </div>
+                    {/* PermissionGate Demo Cards */}
+                    <div className="p-4 sm:p-5 rounded-[14px] bg-white border border-[#E7E5E4] shadow-xs space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b border-[#F5F5F4]">
+                        <div>
+                          <h3 className="font-bold text-[16px] text-[#1C1917] font-serif">
+                            PermissionGate (§29) · Thao tác nghiệp vụ theo quyền
+                          </h3>
+                          <p className="text-[12px] text-[#78716C] mt-0.5">
+                            Các nút bên dưới tự động ẩn/hiện hoặc fallback dựa theo quyền thực tế của role ({role})
+                          </p>
+                        </div>
+                      </div>
 
-                  {/* PermissionGate Demo Cards */}
-                  <div className="p-4 sm:p-5 rounded-[14px] bg-white border border-[#E7E5E4] shadow-xs space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#F5F5F4]">
-                      <div>
-                        <h3 className="font-bold text-[16px] text-[#1C1917] font-serif">
-                          PermissionGate (§29) · Thao tác nghiệp vụ theo quyền
-                        </h3>
-                        <p className="text-[12px] text-[#78716C] mt-0.5">
-                          Các nút bên dưới tự động ẩn/hiện hoặc fallback dựa theo quyền thực tế của role ({role})
-                        </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {/* Permission: attendance:update */}
+                        <PermissionGate
+                          permission="attendance:update"
+                          fallback={
+                            <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
+                              <Lock className="w-4 h-4 text-[#A8A29E]" />
+                              <span>Khóa: attendance:update</span>
+                            </div>
+                          }
+                        >
+                          <div className="p-3 rounded-[10px] bg-[#ECFDF3] border border-[#A7F3D0] flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-[#168154]">
+                              ✅ Điểm danh hôm nay
+                            </div>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => {
+                                handleNavigate("/teacher/attendance");
+                                toast.success("Đã mở màn hình Điểm danh hôm nay");
+                              }}
+                            >
+                              Thực hiện
+                            </Button>
+                          </div>
+                        </PermissionGate>
+
+                        {/* Permission: score:export */}
+                        <PermissionGate
+                          permission="score:export"
+                          fallback={
+                            <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
+                              <Lock className="w-4 h-4 text-[#A8A29E]" />
+                              <span>Khóa: score:export</span>
+                            </div>
+                          }
+                        >
+                          <div className="p-3 rounded-[10px] bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-[#1D4ED8]">
+                              📊 Xuất file Excel điểm
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              leftIcon={<Download className="w-3.5 h-3.5 text-[#1D4ED8]" />}
+                              onClick={() => toast.info("Đang kết xuất báo cáo Excel...")}
+                            >
+                              Xuất
+                            </Button>
+                          </div>
+                        </PermissionGate>
+
+                        {/* Permission: user:delete */}
+                        <PermissionGate
+                          permission="user:delete"
+                          fallback={
+                            <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
+                              <Lock className="w-4 h-4 text-[#A8A29E]" />
+                              <span>Khóa: user:delete (Chỉ Admin)</span>
+                            </div>
+                          }
+                        >
+                          <div className="p-3 rounded-[10px] bg-[#FEF2F2] border border-[#FECDD3] flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-[#C73A3A]">
+                              🗑️ Xóa tài khoản
+                            </div>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                              onClick={() => toast.error("Đã kích hoạt quyền xóa người dùng")}
+                            >
+                              Xóa
+                            </Button>
+                          </div>
+                        </PermissionGate>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {/* Permission: attendance:update */}
-                      <PermissionGate
-                        permission="attendance:update"
-                        fallback={
-                          <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
-                            <Lock className="w-4 h-4 text-[#A8A29E]" />
-                            <span>Khóa: attendance:update</span>
-                          </div>
-                        }
-                      >
-                        <div className="p-3 rounded-[10px] bg-[#ECFDF3] border border-[#A7F3D0] flex items-center justify-between">
-                          <div className="text-[13px] font-semibold text-[#168154]">
-                            ✅ Điểm danh hôm nay
-                          </div>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => toast.success("Đã mở màn hình Điểm danh nhanh")}
-                          >
-                            Thực hiện
-                          </Button>
-                        </div>
-                      </PermissionGate>
-
-                      {/* Permission: score:export */}
-                      <PermissionGate
-                        permission="score:export"
-                        fallback={
-                          <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
-                            <Lock className="w-4 h-4 text-[#A8A29E]" />
-                            <span>Khóa: score:export</span>
-                          </div>
-                        }
-                      >
-                        <div className="p-3 rounded-[10px] bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between">
-                          <div className="text-[13px] font-semibold text-[#1D4ED8]">
-                            📊 Xuất file Excel điểm
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<Download className="w-3.5 h-3.5 text-[#1D4ED8]" />}
-                            onClick={() => toast.info("Đang kết xuất báo cáo Excel...")}
-                          >
-                            Xuất
-                          </Button>
-                        </div>
-                      </PermissionGate>
-
-                      {/* Permission: user:delete */}
-                      <PermissionGate
-                        permission="user:delete"
-                        fallback={
-                          <div className="p-3 rounded-[10px] bg-[#FAFAF9] border border-[#E7E5E4] text-[12px] text-[#A8A29E] flex items-center gap-2">
-                            <Lock className="w-4 h-4 text-[#A8A29E]" />
-                            <span>Khóa: user:delete (Chỉ Admin)</span>
-                          </div>
-                        }
-                      >
-                        <div className="p-3 rounded-[10px] bg-[#FEF2F2] border border-[#FECDD3] flex items-center justify-between">
-                          <div className="text-[13px] font-semibold text-[#C73A3A]">
-                            🗑️ Xóa tài khoản
-                          </div>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-                            onClick={() => toast.error("Đã kích hoạt quyền xóa người dùng")}
-                          >
-                            Xóa
-                          </Button>
-                        </div>
-                      </PermissionGate>
-                    </div>
                   </div>
-                </div>
+                )}
               </RouteGuard>
             </AppShell>
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB: ATTENDANCE MODULE (PHASE 4) (§21, §30, §31, §8) */}
+      {/* ===================================================================== */}
+      {activeTab === "attendance" && (
+        <div className="flex-1">
+          <AttendancePage
+            onBack={() => {
+              setActiveTab("showcase");
+              handleNavigate(ROLE_DEFAULT_PATHS[role]);
+            }}
+          />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB: SCORE ENTRY MODULE (PHASE 5) (§22, §23, §30, §9, §10) */}
+      {/* ===================================================================== */}
+      {activeTab === "scores" && (
+        <div className="flex-1">
+          <TeacherScoresPage
+            onBack={() => {
+              setActiveTab("showcase");
+              handleNavigate(ROLE_DEFAULT_PATHS[role]);
+            }}
+          />
         </div>
       )}
 

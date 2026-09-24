@@ -17,6 +17,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { SidebarProps, NavigationItem, UserRole } from "../../types";
+import { KitoVuaLogo } from "../ui";
 
 // ============================================================================
 // NAVIGATION CONFIGURATION BY ROLE (§3, §4, §5)
@@ -255,19 +256,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="h-16 px-4 flex items-center justify-between border-b border-[#E7E5E4] bg-white">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-[10px] bg-[#B4232C] text-white flex items-center justify-center font-serif font-bold text-xl shadow-xs flex-shrink-0">
-            ✝
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col min-w-0">
-              <span className="font-serif font-bold text-[16px] text-[#1C1917] tracking-tight leading-tight truncate">
-                Đoàn Kitô Vua
-              </span>
-              <span className="text-[11px] text-[#78716C] truncate font-medium">
-                Quản lý Giáo lý
-              </span>
-            </div>
-          )}
+          <KitoVuaLogo
+            size={40}
+            showText={!collapsed}
+            subtitle="Gx. Đức Mẹ Hằng Cứu Giúp"
+          />
         </div>
 
         {/* Mobile close button */}

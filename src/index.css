@@ -8,3 +8,13 @@
   line-height: var(--line-height-body);
   font-weight: var(--font-weight-regular);
 }
+
+/* Remove default browser rectangular focus outline and tap highlight on inputs */
+input,
+input:focus,
+input:focus-visible,
+input:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}

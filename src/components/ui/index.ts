@@ -24,4 +24,5 @@ export * from "./DataTable";
 export * from "./Pagination";
 export * from "./Modal";
 export * from "./Toast";
+export * from "./KitoVuaLogo";
 

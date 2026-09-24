@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <!-- Curve for arched text 'Gx. Đức Mẹ Hằng Cứu Giúp' -->
+    <path id="arch-top-left" d="M 46,280 A 166,166 0 0,1 210,34" fill="none" />
+    <filter id="subtle-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background base -->
+  <circle cx="200" cy="200" r="198" fill="#FFFFFF" />
+
+  <!-- Outer Bold Red Ring -->
+  <circle cx="200" cy="200" r="190" fill="#FFFFFF" stroke="#E01A22" stroke-width="14" />
+
+  <!-- Soft Gold Halo/Moon silhouette background of Our Lady -->
+  <circle cx="236" cy="188" r="124" fill="#FDE047" opacity="0.9" />
+
+  <!-- Silhouette of Our Lady holding Infant Jesus -->
+  <!-- Stylized white veil & halo line art -->
+  <path d="M 235,115 C 265,75 325,105 320,150 C 315,160 305,170 295,165 C 285,150 270,135 245,130 Z" fill="#FFFFFF" opacity="0.95" />
+  <path d="M 265,115 C 290,95 325,120 310,145" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" />
+  <path d="M 230,135 C 250,110 270,110 280,125" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" />
+
+  <!-- Eucharistic White Host background for the Cross -->
+  <circle cx="272" cy="226" r="68" fill="#FFFFFF" filter="url(#subtle-shadow)" />
+
+  <!-- RED EUCHARISTIC CROSS (Trapezoid flared arms) -->
+  <g fill="#E01A22">
+    <!-- Top arm -->
+    <polygon points="240,128 304,128 290,226 254,226" />
+    <!-- Bottom arm -->
+    <polygon points="254,226 290,226 304,316 240,316" />
+    <!-- Left arm -->
+    <polygon points="176,192 272,206 272,246 176,260" />
+    <!-- Right arm -->
+    <!-- Center x=272, right arm flares outward -->
+    <polygon points="272,206 368,192 368,260 272,246" />
+  </g>
+
+  <!-- Central White Communion Host -->
+  <circle cx="272" cy="226" r="21" fill="#FFFFFF" stroke="#FDE047" stroke-width="1.5" />
+
+  <!-- Golden Chalice at the base of the central cross -->
+  <g fill="#F59E0B">
+    <!-- Chalice cup -->
+    <path d="M 258,252 L 286,252 L 278,268 L 266,268 Z" />
+    <!-- Stem -->
+    <rect x="270" y="268" width="4" height="12" />
+    <!-- Base -->
+    <polygon points="262,284 282,284 278,280 266,280" />
+  </g>
+
+  <!-- Open Holy Bible at the bottom (gold & yellow pages) -->
+  <g>
+    <!-- Bible outline lower -->
+    <path d="M 60,332 Q 135,294 200,332 Q 265,294 340,332" fill="none" stroke="#F59E0B" stroke-width="8" stroke-linecap="round" />
+    <!-- Bible top page highlight -->
+    <path d="M 65,327 Q 135,289 200,327 Q 265,289 335,327" fill="none" stroke="#FEF08A" stroke-width="4" stroke-linecap="round" />
+  </g>
+
+  <!-- Arched Text: 'Gx. Đức Mẹ Hằng Cứu Giúp' -->
+  <text fill="#E01A22" font-family="'Noto Serif', 'Times New Roman', Georgia, serif" font-weight="700" font-size="22" letter-spacing="1">
+    <textPath href="#arch-top-left" startOffset="6%">
+      Gx. Đức Mẹ Hằng Cứu Giúp
+    </textPath>
+  </text>
+
+  <!-- Bottom Text: 'ĐOÀN KITÔ VUA' -->
+  <text x="200" y="362" text-anchor="middle" fill="#E01A22" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="21" letter-spacing="2.5">
+    ĐOÀN KITÔ VUA
+  </text>
+</svg>
