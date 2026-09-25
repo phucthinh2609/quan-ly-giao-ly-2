@@ -1,4 +1,4 @@
-# 02 — SITEMAP & USER FLOWS
+# 02 — SITEMAP & USER FLOWS v2
 
 ## 1. Architecture Overview
 
@@ -7,657 +7,369 @@
 ```text
 SYSTEM
 │
+├── PUBLIC (chưa đăng nhập)
+│   └── /welcome · /login
 ├── ADMIN
 │   └── Quản trị toàn hệ thống
 ├── GLV — GIÁO LÝ VIÊN
 │   └── Quản lý lớp / học sinh / điểm danh / điểm số
-└── HS/PH — HỌC SINH / PHỤ HUYNH
-    └── Xem kết quả học tập / điểm danh / thông báo
+├── PARENT — PHỤ HUYNH
+│   └── Theo dõi con: điểm, chuyên cần, thông báo, thành tích
+└── STUDENT — HỌC SINH
+    └── Góc của em: điểm, chuyên cần, huy hiệu, thông báo
 ```
 
 ### Permission Matrix
 
-| Module               | Admin |        GLV         |        HS/PH         |
-| -------------------- | :---: | :----------------: | :------------------: |
-| Dashboard            |   ✅   |         ✅          |          ✅           |
-| Account              |   ✅   |    Xem profile     |     Xem profile      |
-| Quản lý người dùng   |   ✅   |         ❌          |          ❌           |
-| Quản lý lớp          |   ✅   | Theo lớp phân công |          ❌           |
-| Quản lý học sinh     |   ✅   | Theo lớp phân công | Chỉ xem con/bản thân |
-| Điểm danh            |   ✅   |         ✅          |         Xem          |
-| Nhập điểm            |   ✅   |         ✅          |          ❌           |
-| Xem bảng điểm        |   ✅   |         ✅          |          ✅           |
-| Export Excel         |   ✅   |         ✅          |          ❌           |
-| Thông báo            |   ✅   |         ✅          |          ✅           |
-| Cài đặt hệ thống     |   ✅   |         ❌          |          ❌           |
-| Audit / Activity Log |   ✅   |         ❌          |          ❌           |
+| Module | Admin | GLV | Phụ huynh / Học sinh |
+|---|:---:|:---:|:---:|
+| Dashboard | Có | Có | Có |
+| Account / Profile | Có | Xem | Xem |
+| Quản lý người dùng | Có | Không | Không |
+| Quản lý lớp | Có | Lớp phân công | Không |
+| Quản lý học sinh | Có | Lớp phân công | Chỉ con / bản thân |
+| Điểm danh | Có | Có | Xem |
+| Nhập điểm | Có | Có | Không |
+| Xem bảng điểm | Có | Có | Có |
+| Export Excel | Có | Có | Không |
+| Thông báo | Có | Có | Có |
+| Cài đặt hệ thống | Có | Không | Không |
+| Audit / Activity Log | Có | Không | Không |
+| Cài đặt cá nhân (Giao diện, Cỡ chữ) | Có | Có | Có |
 
-## 2. Application Shell
+## 2. Application Shell v2
 
 ```text
-<AppShell>
-├── <Header>
-│   ├── Logo
-│   ├── Page Title
-│   ├── Notification
-│   └── User Menu
-├── <Navigation>
-│   ├── Desktop Sidebar
-│   └── Mobile Bottom Navigation
-└── <MainContent>
+<PreferencesProvider>          theme + textSize + demoMode (localStorage)
+└── <AuthProvider>
+    └── <RouterProvider>
+        ├── PUBLIC  (!isAuthenticated)
+        │   ├── /welcome  → <WelcomePage />   (Marketing surface, AIDA)
+        │   └── /login    → <LoginPage />     (chọn vai trò)
+        └── APP     (isAuthenticated)
+            └── <AppShell data-role={role}>
+                ├── <Sidebar />           lg+  (floating, thu gọn được)
+                ├── <Header />            sticky glass
+                ├── <main>  page enter motion
+                └── <MobileBottomNav />   < lg (floating pill)
+        <DemoPanel />                     nút nổi, mọi màn hình
 ```
 
-Mobile bottom nav tối đa 5 mục; desktop dùng Sidebar.
+- Mobile bottom nav tối đa 5 mục, luôn có nhãn chữ.
+- Sidebar hiện từ `lg` (1024px); tablet dọc dùng bottom nav.
 
-## 3. Sitemap — ADMIN
+## 3. Public surface
+
+```text
+/welcome
+├── Nav (glass pill): Logo · Tính năng · Vai trò · Hành trình · [Đăng nhập]
+├── Hero (Editorial Split)
+├── Marquee khối lớp
+├── Bento tính năng
+├── Card stacking theo vai trò (Học sinh · Phụ huynh · GLV)
+├── Đoạn văn sứ mệnh (scrub reveal)
+├── Role accordion "Bạn là ai?" → đăng nhập nhanh
+└── CTA lớn + Footer
+
+/login
+├── Panel thương hiệu (ảnh + trích dẫn)
+└── 4 ô vai trò lớn: Học sinh · Phụ huynh · Giáo lý viên · Quản trị
+    → login(role) → điều hướng về trang chủ của vai trò
+```
+
+Ghi chú: xác thực hiện tại là **demo** (chọn vai trò). Khi có backend, `/login` thêm form tài khoản; luồng chọn vai trò giữ cho tài khoản nhiều vai trò.
+
+## 4. Sitemap — ADMIN
 
 ```text
 /admin
-│
-├── /dashboard
-│
-├── /users
-│   ├── /students
-│   │   ├── Danh sách
-│   │   ├── /create
-│   │   └── /:studentId
-│   │       ├── Hồ sơ
-│   │       ├── Kết quả học tập
-│   │       ├── Điểm danh
-│   │       └── Lịch sử
-│   ├── /teachers
-│   │   ├── Danh sách
-│   │   ├── /create
-│   │   └── /:teacherId
-│   └── /parents
-│       ├── Danh sách
-│       ├── /create
-│       └── /:parentId
-│
-├── /classes
-│   ├── Danh sách
-│   ├── /create
-│   └── /:classId
-│       ├── Tổng quan
-│       ├── Học sinh
-│       ├── Giáo lý viên
-│       ├── Điểm danh
-│       ├── Bảng điểm
-│       └── Cấu hình lớp
-│
-├── /scores
-│   ├── Tổng quan
-│   ├── Theo lớp
-│   ├── Theo môn / khối
-│   ├── /entry
-│   └── /export
-│
-├── /attendance
-│   ├── Tổng quan
-│   ├── Theo lớp
-│   ├── Theo ngày
-│   └── Báo cáo
-│
-├── /notifications
-│   ├── Danh sách
-│   ├── /create
-│   └── /:notificationId
-│
-├── /reports
-│   ├── Báo cáo học tập
-│   ├── Báo cáo điểm danh
-│   └── Export Excel
-│
-├── /settings
-│   ├── Thông tin giáo xứ / đoàn
-│   ├── Năm học
-│   ├── Khối / lớp
-│   ├── Môn / chương trình học
-│   ├── Quy tắc điểm
-│   ├── Quyền & vai trò
-│   └── Cấu hình thông báo
-│
-├── /activity-log
-└── /profile
+├── /dashboard           Bento: KPI · Điểm danh hôm nay · Học tập · Cảnh báo · Hoạt động
+├── /users               Người dùng (GLV, Phụ huynh, Học sinh) — tạo / xóa
+├── /classes             → /classes/:classId (Tổng quan · Học sinh · Điểm danh · Bảng điểm)
+├── /students            → /students/:studentId (Hồ sơ · Kết quả · Điểm danh)
+├── /attendance          Điểm danh toàn đoàn
+├── /scores              Bảng điểm / nhập điểm
+├── /reports             Báo cáo + Export Excel
+├── /notifications       Danh sách + tạo thông báo
+├── /settings            Giáo xứ · Năm học · Quy tắc điểm
+└── /activity-log        Nhật ký hoạt động
 ```
 
-### Admin Sidebar
+### Admin Sidebar (sentence case, không emoji)
 
 ```text
-┌──────────────────────────┐
-│ ✝  ĐOÀN KITÔ VUA         │
-│    Quản lý Giáo lý       │
-├──────────────────────────┤
-│ 🏠 Dashboard              │
-│                          │
-│ QUẢN LÝ                  │
-│ 👥 Người dùng             │
-│ 🏫 Lớp học                │
-│ 📋 Học sinh               │
-│                          │
-│ HỌC TẬP                  │
-│ ✅ Điểm danh              │
-│ 📝 Bảng điểm              │
-│ 📊 Báo cáo                │
-│                          │
-│ TRUYỀN THÔNG             │
-│ 🔔 Thông báo              │
-│                          │
-│ HỆ THỐNG                 │
-│ ⚙ Cài đặt                 │
-│ 🕘 Activity Log            │
-└──────────────────────────┘
+┌──────────────────────────────┐
+│ [Logo] Đoàn Kitô Vua         │
+│        Gx. Đức Mẹ HCG        │
+├──────────────────────────────┤
+│ Tổng quan                    │
+│   [Home]      Dashboard      │
+│ Quản lý                      │
+│   [Users]     Người dùng     │
+│   [School]    Lớp học        │
+│   [Grad]      Học sinh       │
+│ Học tập                      │
+│   [Check]     Điểm danh      │
+│   [Sheet]     Bảng điểm      │
+│   [Chart]     Báo cáo        │
+│ Truyền thông                 │
+│   [Bell]      Thông báo   3  │
+│ Hệ thống                     │
+│   [Gear]      Cài đặt        │
+│   [History]   Nhật ký        │
+├──────────────────────────────┤
+│ [Avatar] Phêrô Trần  Admin   │
+└──────────────────────────────┘
 ```
 
-## 4. Sitemap — GLV
+### Admin Mobile Bottom Nav
+
+`Tổng quan | Người dùng | Lớp học | Thông báo | Thêm` — "Thêm" mở sheet: Học sinh · Điểm danh · Bảng điểm · Báo cáo · Cài đặt · Nhật ký.
+
+## 5. Sitemap — GLV
 
 ```text
 /teacher
-│
-├── /dashboard
-├── /classes
-│   ├── Lớp của tôi
-│   └── /:classId
-│       ├── Tổng quan
-│       ├── Học sinh
-│       ├── Điểm danh
-│       ├── Nhập điểm
-│       ├── Bảng điểm
-│       └── Thống kê lớp
-├── /attendance
-│   ├── Điểm danh hôm nay
-│   ├── Lịch sử điểm danh
-│   └── Báo cáo
-├── /scores
-│   ├── Nhập điểm
-│   ├── Bảng điểm
-│   ├── Lịch sử chỉnh sửa
-│   └── Export Excel
-├── /students
-│   ├── Danh sách
-│   └── /:studentId
-│       ├── Hồ sơ
-│       ├── Điểm
-│       └── Điểm danh
-├── /notifications
-└── /profile
+├── /dashboard      Hero "Buổi học tới" + CTA Điểm danh / Nhập điểm
+├── /classes        Lớp của tôi → /classes/:classId
+├── /attendance     Điểm danh hôm nay
+├── /scores         Nhập điểm
+├── /students       Học sinh lớp phụ trách → /students/:studentId
+└── /notifications  Thông báo
 ```
 
-GLV chỉ nhìn thấy dữ liệu thuộc lớp/khối được phân công.
+GLV chỉ thấy dữ liệu lớp/khối được phân công.
 
-### GLV Mobile Bottom Navigation
+### GLV Mobile Bottom Nav (nút trung tâm nổi)
 
 ```text
-┌─────────────────────────────────┐
-│ 🏠       👥       ✅       📝    │
-│ Home     Lớp    Điểm danh   Điểm│
-└─────────────────────────────────┘
+╭──────────────────────────────────────────────╮
+│  Trang chủ   Lớp    ( ĐIỂM DANH )  Điểm  Thông báo │
+╰──────────────────────────────────────────────╯
+                       ↑ nút tròn đỏ nổi, shadow-glow
 ```
 
-`Điểm danh` và `Nhập điểm` phải truy cập được trong tối đa 1 thao tác từ Dashboard.
+`Điểm danh` luôn 1 chạm từ mọi màn hình GLV; `Nhập điểm` 1 chạm từ Dashboard.
 
-## 5. Sitemap — Học sinh / Phụ huynh
+## 6. Sitemap — Phụ huynh
 
 ```text
-/home
-│
-├── /dashboard
-├── /learning
-│   ├── Bảng điểm
-│   ├── Điểm từng môn
-│   ├── Kết quả theo kỳ
-│   └── Thành tích
-├── /attendance
-│   ├── Lịch sử đi học
-│   └── Thống kê chuyên cần
-├── /notifications
-│   ├── Thông báo chung
-│   └── Thông báo cá nhân
-├── /achievements
-│   ├── Huy hiệu
-│   ├── XP
-│   ├── Level
-│   └── Streak
-└── /profile
+/dashboard                Trang chủ: chip chọn con · "Tuần này của con" · lối tắt · thông báo mới
+/parent/scores            Bảng điểm con (kỳ học, điểm TB, môn, nhận xét)
+/parent/attendance        Lịch sử điểm danh (tỷ lệ, timeline)
+/parent/notifications     Thông báo (khẩn ghim trên cùng)
+/parent/achievements      Thành tích của con
 ```
 
-Parent không nhìn thấy các module quản trị như Users, Export, Settings.
+Parent Bottom Nav: `Trang chủ | Bảng điểm | Điểm danh | Thông báo`
 
-### Parent Navigation
+## 7. Sitemap — Học sinh
 
 ```text
-🏠 Trang chủ
-📊 Bảng điểm
-✅ Điểm danh
-🔔 Thông báo
-☰ Thêm
+/dashboard | /student/portal   Góc của em: Level · XP · chuỗi · nhiệm vụ · huy hiệu mới
+/student/scores                Điểm của em (sao + từ ngữ dễ hiểu)
+/student/attendance            Chuyên cần (lịch Chúa Nhật dạng chấm)
+/student/achievements          Kệ huy hiệu + XP
+/student/notifications         Thông báo
 ```
 
-## 6. Parent Child Switcher
+Student Bottom Nav: `Nhà của em | Điểm | Huy hiệu | Thông báo`
 
-Nếu một phụ huynh có nhiều con:
+## 8. Child Switcher (Phụ huynh)
 
 ```text
-┌─────────────────────────────┐
-│ Con đang xem                │
-│ 👦 Nguyễn Văn A         ▼   │
-└─────────────────────────────┘
+┌─────────────────────────────────────┐
+│ ( [ảnh] An  ) ( [ảnh] Bình )        │  chip ngang, 1 chạm, chip đang chọn nền night
+└─────────────────────────────────────┘
 ```
 
-Switch child phải refresh dashboard/score/attendance/notification context.
+- ≤ 4 con: chip ngang cuộn được.
+- > 4 con: nút "Chọn con" mở BottomSheet.
+- Đổi con → làm mới dashboard / điểm / điểm danh / thông báo; hiển thị skeleton, không chớp trắng.
 
-## 7. Route Guard
+## 9. Route Guard v2
 
 ```text
-AUTHENTICATED USER
-       │
-       ▼
-  GET USER ROLE
-       │
- ┌─────┼─────────┐
- ▼     ▼         ▼
-ADMIN  GLV     HS/PH
- │      │         │
- ▼      ▼         ▼
-/admin /teacher  /home
+Mở app
+  │
+  ▼
+isAuthenticated?
+  ├── Không → /welcome  (các route app → chuyển về /welcome)
+  └── Có    → ROLE RESOLUTION
+               ├── ADMIN   → /admin/dashboard
+               ├── GLV     → /teacher/dashboard
+               ├── PARENT  → /dashboard
+               └── STUDENT → /dashboard (Góc của em)
 ```
 
-Pseudo logic:
+Đã đăng nhập mà vào `/welcome` hoặc `/login` → chuyển về trang chủ vai trò.
+Không đủ quyền → `<Forbidden403>`: "Trang này dành cho vai trò khác." + [Về trang chủ].
+
+## 10. Core Flow #1 — GLV Điểm danh nhanh v2
 
 ```text
-if !authenticated
-    → /login
-
-else if role == ADMIN
-    → /admin/dashboard
-
-else if role == GLV
-    → /teacher/dashboard
-
-else if role == STUDENT
-    → /dashboard
-
-else if role == PARENT
-    → /dashboard
-```
-
-Unauthorized:
-
-```text
-/403
-→ "Bạn không có quyền truy cập trang này."
-→ [Quay về trang chủ]
-```
-
-## 8. Core User Flow #1 — GLV Điểm Danh Nhanh
-
-### Entry
-
-```text
-Dashboard
-  ↓
-[Điểm danh hôm nay]
-
-HOẶC
-
-Lớp của tôi
-  ↓
-Chọn lớp
-  ↓
-[Điểm danh]
-```
-
-### Main flow
-
-```text
-Dashboard GLV
+Bất kỳ màn hình GLV
+      ↓  chạm nút trung tâm "Điểm danh"
+Màn Điểm danh (lớp mặc định = lớp phụ trách, ngày = hôm nay)
       ↓
-Điểm danh hôm nay
+[Nếu có nháp] Banner: "Có bản nháp lúc 08:12 — Khôi phục | Bỏ qua"
       ↓
-Chọn lớp
+Chạm "Có mặt tất cả"  →  Toast "Đã đánh dấu 32 em có mặt · Hoàn tác"
       ↓
-Danh sách học sinh
+Chạm từng em vắng/muộn:
+   mobile   : chạm chip trạng thái → xoay vòng Có mặt → Vắng → Có phép → Đi muộn
+              chạm "..." → menu chọn trực tiếp
+   tablet+  : phân đoạn 4 nút, chọn trực tiếp 1 chạm
+      ↓   (mỗi thay đổi: rung nhẹ + lưu nháp tự động)
+SaveBar: vòng tiến độ + "3 vắng · 1 muộn" + [Lưu điểm danh]
       ↓
-Gán status
+Đang lưu (nút loading, giữ kích thước)
       ↓
-[Lưu điểm danh]
+Thành công → toast + xóa nháp     |   Lỗi mạng → giữ dữ liệu, SaveBar "Thử lại"
+```
+
+Tìm & lọc trong danh sách: ô tìm tên; chip lọc `Tất cả · Chưa có mặt · Vắng · Có phép · Đi muộn`.
+
+## 11. Core Flow #2 — Nhập điểm hàng loạt v2
+
+```text
+Dashboard → [Nhập điểm]  (hoặc Lớp → Nhập điểm)
       ↓
-Confirmation
+Thanh chọn: Lớp · Môn · Loại điểm  (segmented cho Loại điểm)
       ↓
-Đã lưu thành công
+Bảng nhập (desktop: bảng sticky header; mobile: thẻ)
+      ↓
+Nhập điểm:
+   Enter / Tab / ↓ → em kế tiếp     ↑ → em trước     Esc → bỏ focus
+   Mobile: bàn phím số + dải chip điền nhanh 10 · 9 · 8 · 7 · 6 · 5
+      ↓   (validate inline 0–10, bước 0.25; nháp tự động)
+Tóm tắt lỗi (chạm → cuộn + focus ô lỗi)
+      ↓
+SaveBar: "25/28 đã nhập · 2 lỗi" + [Lưu tất cả]
 ```
 
-Attendance status:
+Rời trang khi còn thay đổi → hộp thoại "Còn N thay đổi chưa lưu" [Ở lại] [Lưu rồi rời] [Bỏ thay đổi].
 
-```ts
-PRESENT
-ABSENT
-EXCUSED
-LATE
-```
-
-### One-touch operation
+## 12. Excel Import
 
 ```text
-Có mặt
-  ↓ tap
-Vắng
-  ↓ tap
-Có phép
-  ↓ tap
-Đi muộn
+[Nhập từ Excel] → Sheet 3 bước:
+  1. Chọn file (.xlsx, .xls)   kéo-thả trên desktop, nút lớn trên mobile
+  2. Kiểm tra: "28 dòng hợp lệ · 2 dòng lỗi" + danh sách lỗi theo dòng
+  3. [Hủy]  [Nhập 28 dòng hợp lệ]
 ```
 
-Bulk actions:
+## 13. Core Flow #3 — Phụ huynh
 
 ```text
-Đánh dấu tất cả Có mặt
-Đánh dấu tất cả Vắng
-Reset
+Đăng nhập → Trang chủ
+  ├── Chip chọn con (1 chạm)
+  ├── "Tuần này của con":  "An đi học 18/20 buổi. Điểm trung bình 8.5 — Giỏi."
+  ├── Lối tắt: Bảng điểm · Điểm danh · Thông báo (3 mới) · Gọi GLV
+  └── Thông báo mới nhất (khẩn ghim đầu)
+
+Bảng điểm: Con → Kỳ học → Điểm TB (số lớn + xếp loại) → Môn → Thành phần → Nhận xét GLV
+Thông báo: Danh sách (Khẩn → Học sinh → Lớp → Chung) → Chi tiết → Hành động liên quan
 ```
 
-Save summary:
+## 14. Core Flow #4 — Học sinh
 
 ```text
-Tổng: 32
-🟢 Có mặt 27
-🔴 Vắng 3
-🟡 Có phép 1
-🟠 Đi muộn 1
+Đăng nhập → Góc của em
+  ├── Lời chào "Chào Maria!" + avatar có vòng Level
+  ├── Thanh XP (lấp đầy động)  "Còn 140 XP nữa lên Level 6"
+  ├── Chuỗi: "5 Chúa Nhật liên tiếp"
+  ├── Nhiệm vụ tuần này (3 thẻ có tiến độ)
+  ├── Huy hiệu mới / sắp đạt ("Còn 2 buổi nữa")
+  └── Buổi học tới (Chúa Nhật 08:00 · Phòng 3)
+
+Điểm của em: thẻ môn — số lớn + 1–5 sao + "Giỏi / Khá / Cố gắng thêm"
+Huy hiệu: kệ lưới; chạm huy hiệu → sheet chi tiết (cách đạt, XP)
 ```
 
-Network error không được reset toàn bộ dữ liệu local.
-
-## 9. Core User Flow #2 — Nhập Điểm Hàng Loạt
+## 15. Demo Panel (thay thanh dev v1)
 
 ```text
-Dashboard
- ↓
-Lớp của tôi
- ↓
-Chọn lớp
- ↓
-Chọn môn
- ↓
-Chọn loại điểm
- ↓
-Bảng nhập điểm
- ↓
-Validation
- ↓
-[Lưu tất cả]
- ↓
-Success / Error
+Nút nổi "Demo" (góc dưới trái desktop; trên bottom nav ở mobile)
+  └── Sheet:
+      ├── Đổi vai trò: Admin · GLV · Phụ huynh · Học sinh
+      ├── Đăng xuất / về /welcome
+      ├── Giao diện: Sáng / Tối     Cỡ chữ: Vừa / Lớn / Rất lớn
+      ├── Chế độ demo (bật công cụ test: giả lập lỗi mạng, checklist)
+      ├── Khung mobile 375px (desktop)
+      └── Tab: Bảng route (URL convention) · Phân quyền dữ liệu
 ```
 
-### Keyboard flow
+## 16. Global Navigation
 
-Desktop/tablet:
-```text
-Input → Enter/Tab → Next Student
-```
+| Nền tảng | Mô hình |
+|---|---|
+| Desktop (lg+) | Sidebar → Module → Page → Detail |
+| Mobile/Tablet | Bottom nav → Page → Sheet/Inline → Detail |
 
-Mobile:
-```text
-Tap ScoreInput → Numeric Keyboard → Next → Next Student
-```
+Mục tiêu: tính năng chính ≤ 2 chạm; phụ ≤ 3 chạm; cài đặt admin ≤ 4 chạm.
 
-Không mở modal cho từng học sinh.
-
-### Validation
-
-Thang điểm 10:
-
-```text
-0 <= Score <= 10
-```
-
-Không hợp lệ:
-
-```text
--1
-11
-abc
-empty nếu bắt buộc
-```
-
-Error inline, không dùng modal.
-
-### Unsaved draft
-
-```text
-⚠ Có thay đổi chưa lưu
-[Tiếp tục chỉnh sửa]
-[Lưu]
-```
-
-Rời trang phải cảnh báo unsaved changes.
-
-## 10. Excel Import
-
-```text
-Nhập điểm
-   ↓
-[Import Excel]
-   ↓
-Upload
-   ↓
-Validate columns
-   ↓
-Preview
-   ↓
-Highlight errors
-   ↓
-[Import]
-   ↓
-Success
-```
-
-Preview:
-
-```text
-✓ 28 dòng hợp lệ
-⚠ 2 dòng lỗi
-
-Dòng 12 — Điểm > 10
-Dòng 19 — Không tìm thấy HS
-
-[Hủy] [Import hợp lệ]
-```
-
-## 11. Core User Flow #3 — Parent Xem Điểm & Thông Báo
-
-```text
-Login
-  ↓
-Authentication
-  ↓
-Role = PARENT
-  ↓
-Dashboard
-```
-
-### Score flow
-
-```text
-Trang chủ
- ↓
-Kết quả học tập
- ↓
-Bảng điểm
-```
-
-Information priority:
-
-```text
-1. Học sinh
-2. Kỳ / năm học
-3. Điểm trung bình
-4. Danh sách môn
-5. Chi tiết điểm
-6. Nhận xét
-```
-
-### Notification flow
-
-```text
-Dashboard
- ↓
-🔔 Thông báo
- ↓
-Notification List
- ↓
-Notification Detail
-```
-
-Types:
-
-```text
-GENERAL
-CLASS
-STUDENT
-SYSTEM
-URGENT
-```
-
-Priority ordering for display:
-`URGENT → STUDENT → CLASS → GENERAL`
-
-## 12. Global Navigation
-
-### Desktop
-
-```text
-Sidebar → Module → Page → Detail
-```
-
-### Mobile
-
-```text
-Bottom Navigation → Primary Page → Inline/Drawer/Sheet → Detail
-```
-
-Mục tiêu:
-- Primary feature ≤ 2 taps
-- Secondary feature ≤ 3 taps
-- Admin setting ≤ 4 taps
-
-## 13. Page Hierarchy
+## 17. Page Hierarchy
 
 ```text
 <AppShell>
-├── Header
-├── Breadcrumb (Desktop/Admin)
-├── PageHeader
-├── PrimaryAction
-├── Filters
-├── MainContent
-└── Feedback / Pagination
+├── Header (glass): Back | Tiêu đề + breadcrumb (desktop) | Cỡ chữ · Theme · Chuông · Avatar
+├── PageHeader (trong nội dung): Title · mô tả · actions
+├── Filters (inline desktop / BottomSheet mobile)
+├── MainContent (reveal stagger)
+└── Sticky action / Pagination
 ```
 
-## 14. Data Ownership
+## 18. Data Ownership
 
 ```text
-ADMIN
-└── ALL ORGANIZATION DATA
-
-GLV
-└── ASSIGNED CLASSES
-    ├── Students
-    ├── Attendance
-    └── Scores
-
-PARENT
-└── LINKED STUDENTS ONLY
-
-STUDENT
-└── SELF DATA ONLY
+ADMIN    → ALL ORGANIZATION DATA
+GLV      → ASSIGNED CLASSES (Students · Attendance · Scores)
+PARENT   → LINKED STUDENTS ONLY
+STUDENT  → SELF DATA ONLY
 ```
 
-## 15. Search & Filters
+## 19. Search & Filters
 
-Danh sách lớn:
-```text
-Search + Filter + Sort + Pagination
-```
+Danh sách lớn: `Search + Filter + Sort + Pagination`. Mobile: ô tìm + nút `Bộ lọc (n)` mở BottomSheet.
 
-Mobile:
-```text
-Search
-[ Bộ lọc ]
-```
+## 20. URL Convention
 
-Filter mở BottomSheet.
-
-## 16. URL Convention
-
-lowercase + kebab/resource hierarchy:
+lowercase + resource hierarchy:
 
 ```text
+/welcome  /login
 /dashboard
-/classes
-/classes/:classId
-/classes/:classId/students
-/classes/:classId/attendance
-/classes/:classId/scores
-/students
-/students/:studentId
-/attendance
-/scores
-/notifications
-/reports
-/settings
+/classes  /classes/:classId  /classes/:classId/students
+/classes/:classId/attendance?date=2026-09-27
+/classes/:classId/scores?subject=sub-gl&type=MIENG
+/students  /students/:studentId
+/attendance  /scores  /notifications  /reports  /settings
+/admin/*  /teacher/*  /parent/*  /student/*
 ```
 
-Query params dành cho:
-`filter`, `search`, `sort`, `page`, `date`
+Query params: `filter`, `search`, `sort`, `page`, `date`, `subject`, `type`.
 
-Ví dụ:
-```text
-/classes/7a/attendance?date=2026-09-24
-```
+## 21. Loading / Empty / Error
 
-## 17. Loading / Empty / Error
+Mỗi module có `LOADING · SUCCESS · ERROR · EMPTY`.
+Loading = Skeleton shimmer đúng hình dạng nội dung. Error có [Thử lại]. Empty có minh họa icon + câu hướng dẫn + hành động.
 
-Mỗi module có:
-```text
-LOADING
-SUCCESS
-ERROR
-EMPTY
-```
+## 22. Dashboard Priority
 
-Loading dùng Skeleton. Error có Retry. Empty có message/action phù hợp.
-
-## 18. Dashboard Priority
-
-| Priority | Admin | GLV | Parent | Student |
+| Priority | Admin | GLV | Phụ huynh | Học sinh |
 |---|---|---|---|---|
-| Hệ thống | ★★★ | ★ | — | — |
-| Lớp | ★★ | ★★★ | ★ | ★ |
-| Điểm danh | ★★ | ★★★ | ★★ | ★★ |
-| Điểm số | ★★ | ★★★ | ★★★ | ★★★ |
-| Thông báo | ★★ | ★★ | ★★★ | ★★ |
-| Gamification | — | ★ | ★ | ★★★ |
+| Hệ thống | Cao | Thấp | — | — |
+| Lớp | Trung bình | Cao | Thấp | Thấp |
+| Điểm danh | Trung bình | Cao | Trung bình | Trung bình |
+| Điểm số | Trung bình | Cao | Cao | Cao |
+| Thông báo | Trung bình | Trung bình | Cao | Trung bình |
+| Gamification | — | Thấp | Thấp | Cao |
 
-## 19. Navigation Contract
-
-Frontend phải theo:
+## 23. Navigation Contract
 
 ```text
-AUTH
-  ↓
-ROLE RESOLUTION
-  ↓
-APP SHELL
-  ↓
-ROLE NAVIGATION
-  ↓
-MODULE
-  ↓
-RESOURCE
-  ↓
-DETAIL / ACTION
+PREFERENCES → AUTH → ROLE RESOLUTION → APP SHELL (data-role) → ROLE NAVIGATION → MODULE → RESOURCE → DETAIL / ACTION
 ```
 
-UI component không tự quyết định quyền; quyền nằm ở Auth/Permission Layer + Route Guard + Navigation Resolver.
+UI component không tự quyết định quyền; quyền nằm ở Auth/Permission Layer + RouteGuard + Navigation config.
