@@ -1,8 +1,6 @@
 import React, { useState } from "react";
-import {
-  Header,
-  MobileBottomNav,
-} from "../../components/layout";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Badge } from "../../components/ui/Badge";
 import {
   ParentChildSwitcher,
   WelcomeSummary,
@@ -53,10 +51,9 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
   onNavigate,
   currentPath = "/dashboard",
   user,
-  onLogout,
   className = "",
 }) => {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser } = useAuth();
   const currentUser = user || authUser;
 
   // Parent Context: holds real reactive state & async re-fetch on child switch
@@ -70,7 +67,6 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
     report,
     isLoadingReport,
     notifications,
-    unreadCount,
     isLoadingNotifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
@@ -108,11 +104,11 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
   };
 
   return (
-    <div className={`min-h-screen bg-[#FAFAF9] flex flex-col pb-24 md:pb-12 ${className}`}>
+    <div className={`space-y-6 ${className}`}>
       {/* =================================================================== */}
-      {/* 1. HEADER                                                           */}
+      {/* 1. PAGE HEADER (In-content header replacing duplicate app Header)   */}
       {/* =================================================================== */}
-      <Header
+      <PageHeader
         title={
           activeParentTab === "scores"
             ? "Bảng điểm học sinh"
@@ -122,12 +118,18 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
             ? "Thông báo Xứ đoàn"
             : "Sổ Liên Lạc Điện Tử"
         }
+        description={
+          activeParentTab === "scores"
+            ? `Bảng điểm chi tiết và nhận xét học tập của ${selectedChild.name}`
+            : activeParentTab === "attendance"
+            ? `Thống kê chuyên cần các buổi học Chúa Nhật của ${selectedChild.name}`
+            : activeParentTab === "notifications"
+            ? "Thông báo học vụ và sự kiện từ Xứ đoàn Kitô Vua"
+            : `Học sinh: ${selectedChild.christianName ? selectedChild.christianName + " " : ""}${selectedChild.name} · ${selectedChild.className}`
+        }
         showBackButton={activeParentTab !== "dashboard"}
         onBack={() => setActiveParentTab("dashboard")}
-        notificationCount={unreadCount}
-        onNotificationClick={() => setActiveParentTab("notifications")}
-        user={currentUser || undefined}
-        onLogout={onLogout || logout}
+        badge={<Badge variant="gold">{selectedChild.className}</Badge>}
         actions={
           <button
             type="button"
@@ -144,7 +146,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-6 space-y-6">
+      <div className="space-y-6">
         {/* ================================================================= */}
         {/* VIEW 1: PARENT DASHBOARD (Default Home View)                       */}
         {/* Exact Tree: ParentChildSwitcher -> WelcomeSummary ->              */}
@@ -399,25 +401,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
             />
           </div>
         )}
-      </main>
-
-      {/* =================================================================== */}
-      {/* 7. PARENT BOTTOM NAVIGATION                                         */}
-      {/* =================================================================== */}
-      <MobileBottomNav
-        role="PARENT"
-        currentPath={
-          activeParentTab === "scores"
-            ? "/parent/scores"
-            : activeParentTab === "attendance"
-            ? "/parent/attendance"
-            : activeParentTab === "notifications"
-            ? "/parent/notifications"
-            : "/dashboard"
-        }
-        onNavigate={handleNav}
-        notificationCount={unreadCount}
-      />
+      </div>
     </div>
   );
 };
