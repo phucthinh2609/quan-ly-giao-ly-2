@@ -34,6 +34,10 @@ lifting state, and composing internals.
 - `patterns-children-over-render-props.md` - Prefer children over renderX props
 - `patterns-explicit-variants.md` - Create explicit component variants
 
+### React 19 APIs (MEDIUM)
+
+- `react19-no-forwardref.md` - Don't use `forwardRef`; use `use()` instead of `useContext()`
+
 ## Core Principles
 
 1. **Composition over configuration** — Instead of adding props, let consumers

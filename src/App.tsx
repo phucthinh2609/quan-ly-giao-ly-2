@@ -636,7 +636,7 @@ function Phase3Showcase() {
                               variant="outline"
                               size="sm"
                               leftIcon={<Download className="w-3.5 h-3.5 text-[#1D4ED8]" />}
-                              onClick={() => toast.info("Đang kết xuất báo cáo Excel...")}
+                              onClick={() => toast.info("Đang kết xuất báo cáo Excel…")}
                             >
                               Xuất
                             </Button>

@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "organization": "Vercel",
+  "date": "January 2026",
+  "abstract": "Web Interface Guidelines for reviewing UI code for accessibility, performance, UX, and design compliance. Formatted for agents and automated code reviews.",
+  "references": [
+    "https://github.com/vercel-labs/web-interface-guidelines"
+  ]
+}

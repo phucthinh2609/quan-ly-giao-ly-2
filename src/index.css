@@ -9,12 +9,24 @@
   font-weight: var(--font-weight-regular);
 }
 
-/* Remove default browser rectangular focus outline and tap highlight on inputs */
+/* Touch action optimization to prevent double-tap delay on mobile */
+button,
+a,
 input,
-input:focus,
-input:focus-visible,
-input:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-  -webkit-tap-highlight-color: transparent;
+select,
+textarea {
+  touch-action: manipulation;
 }
+
+/* Accessible reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

@@ -15,7 +15,7 @@ Don't create RegExp inside render. Hoist to module scope or memoize with `useMem
 function Highlighter({ text, query }: Props) {
   const regex = new RegExp(`(${query})`, 'gi')
   const parts = text.split(regex)
-  return <>{parts.map((part, i) => ...)}</>
+  return <>{parts.map((part, i) => <span key={i}>{part}</span>)}</>
 }
 ```
 
@@ -30,7 +30,7 @@ function Highlighter({ text, query }: Props) {
     [query]
   )
   const parts = text.split(regex)
-  return <>{parts.map((part, i) => ...)}</>
+  return <>{parts.map((part, i) => <span key={i}>{part}</span>)}</>
 }
 ```
 

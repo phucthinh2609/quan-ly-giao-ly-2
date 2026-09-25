@@ -57,7 +57,7 @@ export const Pagination: React.FC<PaginationProps> = ({
     if (canNext) onPageChange(currentPage + 1);
   };
 
-  // Tính dải số trang hiển thị trên Desktop với dấu "..."
+  // Tính dải số trang hiển thị trên Desktop với dấu "…"
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     const maxVisible = 5;
@@ -66,9 +66,11 @@ export const Pagination: React.FC<PaginationProps> = ({
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       pages.push(1);
+    }
 
+    if (totalPages > maxVisible + 2) {
       if (currentPage > 3) {
-        pages.push("...");
+        pages.push("…");
       }
 
       const start = Math.max(2, currentPage - 1);
@@ -79,7 +81,7 @@ export const Pagination: React.FC<PaginationProps> = ({
       }
 
       if (currentPage < totalPages - 2) {
-        pages.push("...");
+        pages.push("…");
       }
 
       pages.push(totalPages);
@@ -161,13 +163,13 @@ export const Pagination: React.FC<PaginationProps> = ({
 
         {/* Các nút số trang */}
         {getPageNumbers().map((page, index) => {
-          if (page === "...") {
+          if (page === "…") {
             return (
               <span
                 key={`ellipsis-${index}`}
                 className="w-[36px] h-[36px] flex items-center justify-center text-[#A8A29E] font-medium"
               >
-                ...
+                …
               </span>
             );
           }
@@ -181,8 +183,8 @@ export const Pagination: React.FC<PaginationProps> = ({
               onClick={() => onPageChange(page as number)}
               aria-current={isCurrent ? "page" : undefined}
               className={`
-                w-[36px] h-[36px] min-w-[36px] min-h-[36px] rounded-[8px] text-[14px] font-semibold
-                flex items-center justify-center transition-all duration-150 cursor-pointer
+                w-[36px] h-[36px] min-w-[36px] min-h-[36px] rounded-[8px] text-[14px] font-semibold tabular-nums
+                flex items-center justify-center transition-colors duration-150 cursor-pointer
                 outline-none focus-visible:ring-2 focus-visible:ring-[#B4232C]/30
                 ${
                   isCurrent

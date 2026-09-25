@@ -34,7 +34,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <div
       role="status"
-      aria-label="Đang tải dữ liệu..."
+      aria-label="Đang tải dữ liệu…"
       className={`
         animate-pulse bg-[#E7E5E4] dark:bg-[#D6D3D1]/50
         ${variantStyles[variant]}
@@ -43,7 +43,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
       style={inlineStyles}
       {...rest}
     >
-      <span className="sr-only">Đang tải...</span>
+      <span className="sr-only">Đang tải…</span>
     </div>
   );
 };

@@ -146,10 +146,21 @@ export function DataTable<T>({
                 return (
                   <tr
                     key={key}
-                    onClick={() => onRowClick?.(item, rowIndex)}
+                    onClick={isClickable ? () => onRowClick?.(item, rowIndex) : undefined}
+                    tabIndex={isClickable ? 0 : undefined}
+                    onKeyDown={
+                      isClickable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onRowClick?.(item, rowIndex);
+                            }
+                          }
+                        : undefined
+                    }
                     className={`
                       transition-colors duration-100
-                      ${isClickable ? "cursor-pointer hover:bg-[#FAFAF9] active:bg-[#F5F5F4]" : "hover:bg-[#FAFAF9]/60"}
+                      ${isClickable ? "cursor-pointer hover:bg-[#FAFAF9] active:bg-[#F5F5F4] focus-visible:ring-2 focus-visible:ring-[#B4232C]/30 outline-none" : "hover:bg-[#FAFAF9]/60"}
                     `}
                   >
                     {columns.map((col) => {
@@ -202,10 +213,22 @@ export function DataTable<T>({
               return (
                 <div
                   key={key}
-                  onClick={() => onRowClick?.(item, index)}
+                  onClick={isClickable ? () => onRowClick?.(item, index) : undefined}
+                  role={isClickable ? "button" : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  onKeyDown={
+                    isClickable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onRowClick?.(item, index);
+                          }
+                        }
+                      : undefined
+                  }
                   className={`
-                    bg-white p-4 rounded-[12px] border border-[#E7E5E4] shadow-xs space-y-2.5 transition-all
-                    ${isClickable ? "active:scale-[0.99] active:bg-[#FAFAF9] cursor-pointer" : ""}
+                    bg-white p-4 rounded-[12px] border border-[#E7E5E4] shadow-xs space-y-2.5 transition-colors
+                    ${isClickable ? "active:scale-[0.99] active:bg-[#FAFAF9] cursor-pointer focus-visible:ring-2 focus-visible:ring-[#B4232C]/30 outline-none" : ""}
                   `}
                 >
                   {/* Dòng chính đầu tiên */}

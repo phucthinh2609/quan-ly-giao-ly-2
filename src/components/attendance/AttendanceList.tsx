@@ -93,7 +93,8 @@ export const AttendanceList: React.FC<AttendanceListProps> = ({
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Tìm theo tên học sinh, Tên Thánh (Maria, Giuse...), mã số..."
+          placeholder="Tìm theo tên học sinh, Tên Thánh (Maria, Giuse…), mã số…"
+          aria-label="Tìm kiếm học sinh"
           disabled={disabled}
           className="
             w-full min-h-[46px] sm:min-h-[48px] pl-10 pr-4 py-2.5 rounded-[12px]

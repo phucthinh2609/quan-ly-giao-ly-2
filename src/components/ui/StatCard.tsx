@@ -119,10 +119,22 @@ export const StatCard: React.FC<StatCardProps> = ({
   return (
     <div
       onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={`
-        bg-white p-5 rounded-[14px] border border-[#E7E5E4] shadow-xs transition-all duration-150
+        bg-white p-5 rounded-[14px] border border-[#E7E5E4] shadow-xs transition-colors duration-150
         flex flex-col justify-between
-        ${onClick ? "hover:border-[#B4232C]/40 hover:shadow-sm cursor-pointer active:scale-[0.99]" : ""}
+        ${onClick ? "hover:border-[#B4232C]/40 hover:shadow-sm cursor-pointer active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-[#B4232C]/30 outline-none" : ""}
         ${className}
       `}
     >
@@ -140,7 +152,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         </div>
 
         {/* Giá trị chính (Số liệu to, tương phản cao) */}
-        <div className="text-[28px] sm:text-[32px] font-bold text-[#1C1917] tracking-tight font-serif leading-none py-1">
+        <div className="text-[28px] sm:text-[32px] font-bold text-[#1C1917] tracking-tight font-serif leading-none py-1 tabular-nums">
           {value}
         </div>
       </div>

@@ -30,7 +30,7 @@ export const Spinner: React.FC<SpinnerProps> = ({
   size = "md",
   color = "primary",
   className = "",
-  label = "Đang tải...",
+  label = "Đang tải…",
 }) => {
   return (
     <span

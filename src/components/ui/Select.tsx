@@ -29,7 +29,7 @@ export const Select: React.FC<SelectProps> = ({
   label,
   value,
   options,
-  placeholder = "Chọn một mục...",
+  placeholder = "Chọn một mục…",
   disabled = false,
   required = false,
   error,
@@ -137,7 +137,7 @@ export const Select: React.FC<SelectProps> = ({
         aria-describedby={hasError ? errorId : helperText ? helperId : undefined}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={`
-          w-full flex items-center justify-between text-left transition-all duration-150 outline-none
+          w-full flex items-center justify-between text-left transition-colors duration-150 outline-none
           border bg-white cursor-pointer select-none
           ${sizeClasses[size]}
           ${

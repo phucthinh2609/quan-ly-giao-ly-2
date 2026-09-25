@@ -57,7 +57,7 @@ export const Radio: React.FC<RadioProps> = ({
       <div className="relative flex items-center justify-center shrink-0 w-6 h-6 mt-0.5">
         <div
           className={`
-            w-5 h-5 rounded-full transition-all duration-150 flex items-center justify-center
+            w-5 h-5 rounded-full transition-colors duration-150 flex items-center justify-center
             border bg-white
             ${
               checked

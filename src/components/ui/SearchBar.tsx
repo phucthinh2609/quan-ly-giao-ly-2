@@ -40,7 +40,7 @@ export interface SearchBarProps {
  */
 export const SearchBar: React.FC<SearchBarProps> = ({
   value,
-  placeholder = "Tìm kiếm...",
+  placeholder = "Tìm kiếm…",
   debounceMs = 300,
   onChange,
   onClear,
@@ -138,7 +138,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           w-full rounded-[10px] bg-white text-[#292524] placeholder-[#A8A29E]
           border border-[#E7E5E4] hover:border-[#D6D3D1]
           focus:border-[#B4232C] focus:ring-3 focus:ring-[#B4232C]/20 outline-none
-          transition-all duration-150 font-sans
+          transition-colors duration-150 font-sans
           disabled:bg-[#F5F5F4] disabled:text-[#A8A29E] disabled:cursor-not-allowed
           ${sizeStyles[size]}
         `}

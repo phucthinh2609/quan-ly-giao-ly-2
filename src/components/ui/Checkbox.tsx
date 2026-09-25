@@ -71,7 +71,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         <div className="relative flex items-center justify-center shrink-0 w-6 h-6 mt-0.5">
           <div
             className={`
-              w-5 h-5 rounded-[6px] transition-all duration-150 flex items-center justify-center
+              w-5 h-5 rounded-[6px] transition-colors duration-150 flex items-center justify-center
               border text-white
               ${
                 isChecked || isIndeterminate

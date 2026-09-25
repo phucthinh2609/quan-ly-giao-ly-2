@@ -68,7 +68,7 @@ export interface FilterBarProps {
  */
 export const FilterBar: React.FC<FilterBarProps> = ({
   searchQuery = "",
-  searchPlaceholder = "Tìm kiếm...",
+  searchPlaceholder = "Tìm kiếm…",
   onSearchChange,
   onSearchClear,
   filters = [],

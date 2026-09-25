@@ -153,7 +153,7 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
 
         <div
           className={`
-            relative flex items-center w-full transition-all duration-150
+            relative flex items-center w-full transition-colors duration-150
             border bg-white
             ${sizeClasses[size]}
             ${
@@ -190,7 +190,7 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
             }}
             onBlur={handleBlur}
             onKeyDown={onKeyDown}
-            className="w-full h-full bg-transparent border-none outline-none p-0 text-inherit placeholder:text-[#A8A29E] text-center"
+            className="w-full h-full bg-transparent border-none outline-none p-0 text-inherit placeholder:text-[#A8A29E] text-center tabular-nums"
           />
 
           {hasError && (

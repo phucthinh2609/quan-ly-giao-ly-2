@@ -97,7 +97,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {/* Input Wrapper */}
         <div
           className={`
-            relative flex items-center w-full transition-all duration-150
+            relative flex items-center w-full transition-colors duration-150
             border bg-white
             ${sizeClasses[size]}
             ${
