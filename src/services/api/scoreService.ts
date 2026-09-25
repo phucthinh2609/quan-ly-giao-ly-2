@@ -38,7 +38,7 @@ export const scoreService = {
     if (currentUser && currentUser.role === "GLV") {
       const allowed = ["cls-7a", "cls-8a", "class-rl1a"];
       if (!allowed.includes(classId)) {
-        throw new Error("GLV chỉ được nhập và xem điểm của các lớp được phân công (§14).");
+        throw new Error("Giáo lý viên chỉ nhập và xem được điểm của lớp mình phụ trách.");
       }
     }
 
@@ -129,7 +129,7 @@ export const scoreService = {
     // Verify Data Ownership (§14)
     if (currentUser) {
       if (currentUser.role === "STUDENT" && studentId !== "stu-001" && studentId !== "s-01") {
-        throw new Error("Học sinh chỉ được xem bảng điểm của chính mình (§14).");
+        throw new Error("Em chỉ xem được bảng điểm của chính mình.");
       }
       if (currentUser.role === "PARENT") {
         const allowedIds = currentUser.childrenIds || ["stu-001", "stu-002", "s-01", "s-02"];

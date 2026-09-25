@@ -1,5 +1,6 @@
-import React from "react";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
+import { CalendarDays } from "lucide-react";
+import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/IconButton";
 
 export interface AttendanceDateSelectorProps {
@@ -7,6 +8,24 @@ export interface AttendanceDateSelectorProps {
   onDateChange: (date: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Số Chúa Nhật gần nhất hiển thị trong dải chip (mặc định 6) */
+  recentCount?: number;
+}
+
+const WEEKDAYS = ["Chúa Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+const WEEKDAYS_SHORT = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+function parseDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return new Date();
+  return new Date(y, m - 1, d);
+}
+
+function toDateString(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 // Utility: format YYYY-MM-DD sang tiếng Việt dạng "Chúa Nhật, 24/09/2026"
@@ -15,179 +34,156 @@ export function formatVietnameseDate(dateStr: string): {
   formattedDate: string;
   isToday: boolean;
 } {
-  const parts = dateStr.split("-").map(Number);
-  const date = new Date(parts[0], parts[1] - 1, parts[2]);
-
-  const days = [
-    "Chúa Nhật",
-    "Thứ Hai",
-    "Thứ Ba",
-    "Thứ Tư",
-    "Thứ Năm",
-    "Thứ Sáu",
-    "Thứ Bảy",
-  ];
-
+  const date = parseDate(dateStr);
   const now = new Date();
   const isToday =
-    now.getFullYear() === date.getFullYear() &&
-    now.getMonth() === date.getMonth() &&
-    now.getDate() === date.getDate();
-
-  const dayOfWeek = days[date.getDay()];
+    now.getFullYear() === date.getFullYear() && now.getMonth() === date.getMonth() && now.getDate() === date.getDate();
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
-
   return {
-    dayOfWeek,
-    formattedDate: `${dd}/${mm}/${yyyy}`,
+    dayOfWeek: WEEKDAYS[date.getDay()],
+    formattedDate: `${dd}/${mm}/${date.getFullYear()}`,
     isToday,
   };
 }
 
 export function shiftDate(dateStr: string, daysToAdd: number): string {
-  const parts = dateStr.split("-").map(Number);
-  const date = new Date(parts[0], parts[1] - 1, parts[2]);
+  const date = parseDate(dateStr);
   date.setDate(date.getDate() + daysToAdd);
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return toDateString(date);
 }
 
 export function getTodayDateString(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return toDateString(new Date());
+}
+
+/** Các Chúa Nhật gần nhất (tăng dần), kết thúc ở Chúa Nhật ≤ ngày mốc. */
+export function getRecentSundays(count = 6, from: string = getTodayDateString()): string[] {
+  const anchor = parseDate(from);
+  anchor.setDate(anchor.getDate() - anchor.getDay());
+  const result: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(anchor);
+    d.setDate(anchor.getDate() - i * 7);
+    result.push(toDateString(d));
+  }
+  return result;
 }
 
 /**
- * AttendanceDateSelector Component
- * Dành cho GLV chọn ngày điểm danh (thường là Chúa Nhật hoặc các buổi học)
- * Có phím chuyển nhanh về "Hôm nay", tiến/lùi tuần và chọn ngày lịch.
+ * AttendanceDateSelector (03 §7): dải chip ngang các Chúa Nhật gần nhất + nút lịch (input date gốc).
+ * Chip đang chọn nền night; hôm nay có chấm đỏ và nhãn "Hôm nay".
  */
 export const AttendanceDateSelector: React.FC<AttendanceDateSelectorProps> = ({
   selectedDate,
   onDateChange,
   disabled = false,
-  className = "",
+  className,
+  recentCount = 6,
 }) => {
-  const { dayOfWeek, formattedDate, isToday } = formatVietnameseDate(selectedDate);
   const todayStr = getTodayDateString();
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handlePrevDay = () => {
-    // Thường các buổi giáo lý cách nhau 7 ngày (mỗi Chúa Nhật) hoặc 1 ngày
-    onDateChange(shiftDate(selectedDate, -7));
-  };
+  const dates = useMemo(() => {
+    const set = new Set(getRecentSundays(recentCount, todayStr));
+    set.add(todayStr);
+    if (selectedDate) set.add(selectedDate);
+    return Array.from(set).sort();
+  }, [recentCount, todayStr, selectedDate]);
 
-  const handleNextDay = () => {
-    onDateChange(shiftDate(selectedDate, 7));
-  };
+  // Đưa chip đang chọn vào giữa dải (không cuộn dọc trang)
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const chip = scroller.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!chip) return;
+    scroller.scrollLeft = chip.offsetLeft - scroller.clientWidth / 2 + chip.clientWidth / 2;
+  }, [selectedDate, dates]);
 
-  const handleGoToday = () => {
-    onDateChange(todayStr);
+  const openPicker = () => {
+    const input = inputRef.current;
+    if (!input || disabled) return;
+    try {
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
+        return;
+      }
+    } catch {
+      // Trình duyệt chặn showPicker → dùng cách dự phòng bên dưới
+    }
+    input.focus();
+    input.click();
   };
 
   return (
-    <div
-      className={`
-        flex flex-wrap items-center justify-between gap-2.5 sm:gap-3
-        p-3 sm:p-3.5 bg-white rounded-[14px] border border-[#E7E5E4] shadow-xs
-        ${className}
-      `}
-    >
-      {/* Tiêu đề & Thông tin ngày hiện tại */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-[10px] bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-[#B4232C] shrink-0">
-          <CalendarIcon className="w-5 h-5" />
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-[15px] sm:text-[16px] text-[#1C1917] font-serif">
-              {dayOfWeek}
-            </span>
-            {isToday ? (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#ECFDF3] text-[#168154] border border-[#A7F3D0]">
-                Hôm nay
+    <div className={cn("flex min-w-0 items-center gap-2", className)}>
+      <div
+        ref={scrollerRef}
+        role="group"
+        aria-label="Chọn buổi học"
+        className="no-scrollbar relative -mx-1 -my-1.5 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 py-1.5"
+      >
+        {dates.map((date) => {
+          const d = parseDate(date);
+          const selected = date === selectedDate;
+          const isToday = date === todayStr;
+          const dayLabel = `${d.getDate()}/${d.getMonth() + 1}`;
+          const { dayOfWeek, formattedDate } = formatVietnameseDate(date);
+          return (
+            <button
+              key={date}
+              type="button"
+              aria-pressed={selected}
+              aria-label={`${isToday ? "Hôm nay, " : ""}${dayOfWeek} ${formattedDate}`}
+              disabled={disabled}
+              onClick={() => !selected && onDateChange(date)}
+              className={cn(
+                "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold whitespace-nowrap",
+                "transition-colors duration-150 focus-visible:outline-3 focus-visible:outline-offset-2",
+                selected
+                  ? "border-transparent bg-night text-on-night shadow-xs dark:border-on-night/25"
+                  : isToday
+                  ? "border-primary/30 bg-primary-soft text-primary-ink hover:bg-primary-soft/70"
+                  : "border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink",
+                disabled && "cursor-not-allowed opacity-50"
+              )}
+            >
+              {isToday && (
+                <span
+                  aria-hidden="true"
+                  className={cn("size-1.5 shrink-0 rounded-full", selected ? "bg-on-night" : "bg-primary")}
+                />
+              )}
+              <span className={cn(selected ? "text-on-night/75" : isToday ? "text-primary-ink" : "text-ink-3")}>
+                {isToday ? "Hôm nay" : WEEKDAYS_SHORT[d.getDay()]}
               </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5F5F4] text-[#78716C]">
-                Lịch sử
-              </span>
-            )}
-          </div>
-          <div className="text-[13px] text-[#57534E] font-medium mt-0.5">
-            Ngày {formattedDate}
-          </div>
-        </div>
+              <span className="font-mono tabular-nums">{dayLabel}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Bộ điều hướng Ngày: Tuần trước | Hôm nay | Tuần tới */}
-      <div className="flex items-center gap-1.5 ml-auto">
+      <div className="relative shrink-0">
         <IconButton
+          aria-label="Chọn ngày khác trên lịch"
           variant="outline"
           size="md"
-          aria-label="Xem buổi Chúa Nhật trước (trừ 7 ngày)"
-          title="Chúa Nhật trước"
-          onClick={handlePrevDay}
           disabled={disabled}
-          className="text-[#57534E]"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </IconButton>
-
-        {!isToday && (
-          <button
-            type="button"
-            onClick={handleGoToday}
-            disabled={disabled}
-            className="
-              flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold
-              bg-[#FFF1F2] text-[#B4232C] border border-[#FECDD3] hover:bg-[#FFE4E6]
-              transition-colors cursor-pointer min-h-[44px]
-            "
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Về Hôm nay</span>
-          </button>
-        )}
-
-        <IconButton
-          variant="outline"
-          size="md"
-          aria-label="Xem buổi Chúa Nhật kế tiếp (cộng 7 ngày)"
-          title="Chúa Nhật sau"
-          onClick={handleNextDay}
+          onClick={openPicker}
+          icon={<CalendarDays />}
+        />
+        <input
+          ref={inputRef}
+          type="date"
+          value={selectedDate}
+          max={todayStr}
+          tabIndex={-1}
+          aria-hidden="true"
           disabled={disabled}
-          className="text-[#57534E]"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </IconButton>
-
-        {/* Input ẩn để chọn bất kỳ ngày nào từ bộ chọn trình duyệt */}
-        <label
-          className="
-            relative flex items-center justify-center px-3 py-2 rounded-[10px]
-            border border-[#E7E5E4] bg-[#FAFAF9] hover:bg-[#F5F5F4]
-            text-[13px] font-semibold text-[#57534E] cursor-pointer min-h-[44px]
-            transition-colors
-          "
-          title="Chọn ngày khác"
-        >
-          <span>Đổi ngày</span>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => e.target.value && onDateChange(e.target.value)}
-            disabled={disabled}
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            aria-label="Chọn ngày cụ thể trong lịch"
-          />
-        </label>
+          onChange={(e) => e.target.value && onDateChange(e.target.value)}
+          className="pointer-events-none absolute inset-0 size-full opacity-0"
+        />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React from "react";
-import { AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { ScoreValidationItem } from "../../types";
+import { cn } from "../../lib/cn";
 
 export interface ScoreValidationSummaryProps {
   errors: ScoreValidationItem[];
@@ -9,13 +10,8 @@ export interface ScoreValidationSummaryProps {
 }
 
 /**
- * ScoreValidationSummary Component (§22 - 03_Component_Library.md)
- *
- * Tính năng quan trọng:
- * - Hiển thị tổng quan các lỗi nhập điểm hiện tại
- * - Mỗi lỗi click được → scrollIntoView({ behavior: "smooth", block: "center" })
- *   và tự động focus vào đúng ô ScoreInput của học sinh bị lỗi đó.
- * - Không gây chặn (không mở modal), cho phép GLV xem danh sách và sửa từng em.
+ * Tóm tắt lỗi nhập điểm (03 §8): card soft danger, mỗi lỗi là một chip bấm được
+ * → cuộn tới và focus đúng ô điểm của học sinh (không mở modal).
  */
 export const ScoreValidationSummary: React.FC<ScoreValidationSummaryProps> = ({
   errors,
@@ -25,75 +21,58 @@ export const ScoreValidationSummary: React.FC<ScoreValidationSummaryProps> = ({
   if (errors.length === 0) {
     return (
       <div
-        className={`p-3.5 sm:p-4 rounded-[12px] bg-[#F0FDF4] border border-[#BBF7D0] flex items-center gap-2.5 text-[#166534] ${className}`}
+        role="status"
+        className={cn("flex items-center gap-3 rounded-card bg-success-soft p-4 text-success", className)}
       >
-        <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-[#168154]" />
-        <div className="text-[13px] sm:text-[14px] font-medium">
-          Tất cả điểm đã nhập đều hợp lệ (Thang điểm 0–10). Không có lỗi dữ liệu.
-        </div>
+        <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
+        <p className="text-sm font-medium text-ink">Tất cả điểm đã nhập đều hợp lệ.</p>
       </div>
     );
   }
 
   return (
-    <div
-      role="region"
+    <section
       aria-label="Tóm tắt lỗi nhập điểm"
-      className={`p-4 rounded-[14px] bg-[#FFF1F2] border-2 border-[#FECDD3] shadow-xs space-y-3 ${className}`}
+      className={cn("rounded-card border border-danger/25 bg-danger-soft p-4 sm:p-5", className)}
     >
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-[#DC4C4C] text-white flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-4 h-4" />
-          </div>
-          <div>
-            <h4 className="font-bold text-[15px] sm:text-[16px] text-[#991B1B] font-serif">
-              Có {errors.length} điểm chưa hợp lệ cần chỉnh sửa
-            </h4>
-            <p className="text-[12px] text-[#B4232C]">
-              Bấm vào từng lỗi bên dưới để tự động cuộn đến và sửa ngay trên bảng điểm
-            </p>
-          </div>
-        </div>
-        <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#FEE2E2] text-[#DC4C4C] border border-[#FECDD3]">
-          {errors.length} Lỗi
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-danger text-on-solid">
+          <AlertCircle className="size-5" aria-hidden="true" />
         </span>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-ink">
+            <span className="font-mono tabular-nums">{errors.length}</span> điểm cần sửa
+          </h2>
+          <p className="text-sm text-ink-2">Chạm vào tên để đến ô cần sửa.</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+      <ul className="mt-3 flex flex-wrap gap-2">
         {errors.map((item) => (
-          <button
-            key={item.studentId}
-            type="button"
-            onClick={() => onErrorClick(item.studentId)}
-            className="
-              text-left p-2.5 sm:p-3 rounded-[10px] bg-white border border-[#FECDD3]
-              hover:border-[#DC4C4C] hover:bg-[#FFF5F5] hover:shadow-xs
-              transition-all flex items-center justify-between gap-3 group cursor-pointer
-              focus:outline-none focus:ring-2 focus:ring-[#DC4C4C]
-            "
-          >
-            <div className="min-w-0 flex items-center gap-2">
-              <span className="font-mono font-bold text-[12px] text-[#B4232C] bg-[#FEE2E2] px-1.5 py-0.5 rounded">
-                #{String(item.orderNumber).padStart(2, "0")}
+          <li key={item.studentId} className="min-w-0 max-w-full">
+            <button
+              type="button"
+              onClick={() => onErrorClick(item.studentId)}
+              title={item.error}
+              aria-label={`Sửa điểm của ${item.studentName}: ${item.error}`}
+              className={cn(
+                "group inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-danger/30 bg-surface py-1.5 pr-3 pl-1.5 text-left",
+                "text-sm font-semibold text-ink shadow-xs transition-[border-color,transform] duration-150 ease-out-soft",
+                "hover:border-danger active:scale-[0.97] focus-visible:outline-3 focus-visible:outline-offset-2"
+              )}
+            >
+              <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full bg-danger-soft px-2 font-mono text-xs font-semibold text-danger tabular-nums">
+                {String(item.orderNumber).padStart(2, "0")}
               </span>
-              <div className="min-w-0">
-                <div className="font-bold text-[13px] text-[#1C1917] truncate">
-                  {item.studentName}
-                </div>
-                <div className="text-[12px] text-[#DC4C4C] font-medium leading-tight">
-                  {item.error}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 text-[#DC4C4C] text-[12px] font-semibold group-hover:translate-x-1 transition-transform flex-shrink-0">
-              <span className="hidden sm:inline">Sửa</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </div>
-          </button>
+              <span className="truncate">{item.studentName}</span>
+              <ArrowRight
+                className="size-4 shrink-0 text-danger transition-transform duration-150 group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </button>
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 };

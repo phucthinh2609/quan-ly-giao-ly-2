@@ -1,4 +1,6 @@
 import React, { useId } from "react";
+import { AlertCircle } from "lucide-react";
+import { cn } from "../../lib/cn";
 
 export interface RadioOption {
   value: string;
@@ -19,6 +21,10 @@ export interface RadioProps {
   onChange: (value: string) => void;
 }
 
+/**
+ * Radio (03 §4.4): vòng tròn size-5, checked nền primary + chấm on-primary.
+ * Cả dòng nhãn là vùng chạm >= 44px.
+ */
 export const Radio: React.FC<RadioProps> = ({
   name,
   value,
@@ -36,11 +42,12 @@ export const Radio: React.FC<RadioProps> = ({
   return (
     <label
       htmlFor={radioId}
-      className={`
-        inline-flex items-start gap-3 select-none min-h-[44px] py-1 cursor-pointer font-sans
-        ${disabled ? "cursor-not-allowed opacity-60" : ""}
-        ${className}
-      `}
+      className={cn(
+        "group inline-flex min-h-11 items-start gap-3 py-2.5 select-none",
+        !label && !description && "min-w-11 justify-center",
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+        className
+      )}
     >
       <input
         id={radioId}
@@ -50,55 +57,38 @@ export const Radio: React.FC<RadioProps> = ({
         checked={checked}
         disabled={disabled}
         onChange={() => !disabled && onChange(value)}
-        className="sr-only peer"
+        className="peer sr-only"
       />
 
-      {/* Custom Radio Circle Container */}
-      <div className="relative flex items-center justify-center shrink-0 w-6 h-6 mt-0.5">
-        <div
-          className={`
-            w-5 h-5 rounded-full transition-colors duration-150 flex items-center justify-center
-            border bg-white
-            ${
-              checked
-                ? "border-[#B4232C]"
-                : "border-[#D6D3D1] hover:border-[#A8A29E]"
-            }
-            ${
-              disabled
-                ? "bg-[#F5F5F4] border-[#E7E5E4]"
-                : "peer-focus-visible:ring-3 peer-focus-visible:ring-[#B4232C]/25"
-            }
-          `}
-        >
-          {checked && (
-            <div
-              className={`w-2.5 h-2.5 rounded-full transition-transform animate-in zoom-in-50 duration-100 ${
-                disabled ? "bg-[#A8A29E]" : "bg-[#B4232C]"
-              }`}
-            />
+      {/* Vòng tròn hiển thị (sibling ngay sau input để nhận peer-focus-visible) */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+          "transition-[background-color,border-color,box-shadow] duration-150 ease-out-soft",
+          "peer-focus-visible:ring-4 peer-focus-visible:ring-primary/25",
+          checked
+            ? "border-primary bg-primary"
+            : cn("bg-surface", disabled ? "border-line-strong bg-surface-2" : "border-ink-3 group-hover:border-ink-2")
+        )}
+      >
+        <span
+          className={cn(
+            "size-2 rounded-full bg-on-primary transition-transform duration-150 ease-spring",
+            checked ? "scale-100" : "scale-0"
           )}
-        </div>
-      </div>
+        />
+      </span>
 
-      {/* Label and Description */}
       {(label || description) && (
-        <div className="flex flex-col">
+        <span className="flex min-w-0 flex-col">
           {label && (
-            <span
-              className={`text-[15px] font-medium leading-snug ${
-                disabled ? "text-[#A8A29E]" : "text-[#292524]"
-              }`}
-            >
+            <span className={cn("text-base font-medium leading-snug", disabled ? "text-ink-3" : "text-ink")}>
               {label}
             </span>
           )}
-          {description && (
-            <span className="text-[13px] text-[#78716C] mt-0.5 leading-normal">
-              {description}
-            </span>
-          )}
-        </div>
+          {description && <span className="mt-0.5 text-sm leading-normal text-ink-3">{description}</span>}
+        </span>
       )}
     </label>
   );
@@ -129,21 +119,17 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
   className = "",
   onChange,
 }) => {
-  return (
-    <fieldset className={`flex flex-col font-sans ${className}`} aria-invalid={Boolean(error)}>
-      {label && (
-        <legend className="text-[14px] font-medium text-[#292524] mb-2">
-          {label}
-        </legend>
-      )}
+  const messageId = useId();
 
-      <div
-        className={`flex ${
-          orientation === "horizontal"
-            ? "flex-row flex-wrap gap-x-6 gap-y-2"
-            : "flex-col gap-y-1"
-        }`}
-      >
+  return (
+    <fieldset
+      className={cn("flex min-w-0 flex-col", className)}
+      aria-invalid={Boolean(error)}
+      aria-describedby={error || helperText ? messageId : undefined}
+    >
+      {label && <legend className="mb-1 text-sm font-medium text-ink-2">{label}</legend>}
+
+      <div className={cn("flex", orientation === "horizontal" ? "flex-row flex-wrap gap-x-6" : "flex-col")}>
         {options.map((opt) => (
           <Radio
             key={opt.value}
@@ -159,11 +145,14 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
       </div>
 
       {error ? (
-        <p role="alert" className="text-[12px] font-medium text-[#DC4C4C] mt-1.5">
-          {error}
+        <p id={messageId} role="alert" className="mt-1 flex items-start gap-1.5 text-sm font-medium text-danger">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
         </p>
       ) : helperText ? (
-        <p className="text-[12px] text-[#78716C] mt-1.5">{helperText}</p>
+        <p id={messageId} className="mt-1 text-sm text-ink-3">
+          {helperText}
+        </p>
       ) : null}
     </fieldset>
   );

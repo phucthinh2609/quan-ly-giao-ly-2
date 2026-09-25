@@ -97,7 +97,7 @@ export const classService = {
         cls.id === "cls-8a" ||
         cls.teachers?.some((t) => t.includes(currentUser.name));
       if (!isAssigned) {
-        throw new Error("Bạn không có quyền xem thông tin lớp này (Data Ownership §14).");
+        throw new Error("Bạn không có quyền xem thông tin lớp này.");
       }
     }
 

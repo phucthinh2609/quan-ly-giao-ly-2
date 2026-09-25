@@ -1,15 +1,25 @@
 import React from "react";
+import { cn } from "../../lib/cn";
 
 export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Số → quy đổi sang rem (16 = 1rem) để co giãn theo cỡ chữ người dùng; chuỗi dùng nguyên giá trị */
   width?: string | number;
   height?: string | number;
   variant?: "rectangular" | "text" | "circular";
   className?: string;
 }
 
+const variantStyles: Record<NonNullable<SkeletonProps["variant"]>, string> = {
+  rectangular: "rounded-sm",
+  text: "my-1 h-4 rounded-xs",
+  circular: "rounded-full",
+};
+
+const toCssSize = (value?: string | number) => (typeof value === "number" ? `${value / 16}rem` : value);
+
 /**
- * Skeleton Loading Component
- * Ưu tiên hiển thị Skeleton ở cấp trang (page-level) thay vì Spinner toàn màn hình (§18, §14 Wireframe)
+ * Skeleton (03 §4.12): khối bg-surface-3 + shimmer (tự tắt khi reduced-motion).
+ * Ưu tiên Skeleton đúng hình dạng nội dung thay vì Spinner toàn trang.
  */
 export const Skeleton: React.FC<SkeletonProps> = ({
   width,
@@ -19,15 +29,9 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   style,
   ...rest
 }) => {
-  const variantStyles = {
-    rectangular: "rounded-[10px]",
-    text: "rounded-[4px] h-[16px] my-1",
-    circular: "rounded-full",
-  };
-
   const inlineStyles: React.CSSProperties = {
-    width: typeof width === "number" ? `${width}px` : width,
-    height: typeof height === "number" ? `${height}px` : height,
+    width: toCssSize(width),
+    height: toCssSize(height),
     ...style,
   };
 
@@ -35,11 +39,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     <div
       role="status"
       aria-label="Đang tải dữ liệu…"
-      className={`
-        animate-pulse bg-[#E7E5E4] dark:bg-[#D6D3D1]/50
-        ${variantStyles[variant]}
-        ${className}
-      `}
+      className={cn("shimmer relative overflow-hidden bg-surface-3", variantStyles[variant], className)}
       style={inlineStyles}
       {...rest}
     >

@@ -1,53 +1,57 @@
 import React from "react";
-import { TrendingUp, TrendingDown, Minus, AlertCircle } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Minus, AlertCircle } from "lucide-react";
+import { Card } from "./Card";
+import { IconTile } from "./IconTile";
+import { CountUp } from "./CountUp";
 import { Skeleton } from "./Skeleton";
+import { cn } from "../../lib/cn";
+import { TONE_SOFT, Tone } from "./tone";
 
 export type TrendType = "positive" | "negative" | "neutral";
 
 export interface StatCardProps {
-  /**
-   * Tiêu đề chỉ số (VD: Tổng học sinh, Chuyên cần hôm nay)
-   */
+  /** Tiêu đề chỉ số (VD: Tổng học sinh, Chuyên cần hôm nay) */
   title: string;
-  /**
-   * Giá trị định lượng (VD: 128, 94%, 8.5)
-   */
+  /** Giá trị (VD: 128, "94%", 8.5). Số sẽ được đếm động bằng CountUp. */
   value: React.ReactNode;
-  /**
-   * Icon đại diện (VD: Users, Award, Calendar, CheckSquare)
-   */
+  /** Icon đại diện (bọc trong IconTile) */
   icon?: React.ReactNode;
-  /**
-   * Chuỗi xu hướng biến động (VD: "+5 so với tháng trước", "-2%")
-   */
+  /** Chuỗi xu hướng (VD: "+5 so với tháng trước", "-2%") */
   trend?: string;
-  /**
-   * Loại biến động: positive (xanh lá), negative (đỏ), neutral (xám)
-   */
+  /** Loại xu hướng: positive (success), negative (danger), neutral */
   trendType?: TrendType;
-  /**
-   * Trạng thái đang tải dữ liệu (ưu tiên Skeleton)
-   */
+  /** Đang tải (Skeleton) */
   loading?: boolean;
-  /**
-   * Lỗi tải dữ liệu cho thẻ
-   */
+  /** Lỗi tải dữ liệu cho thẻ */
   error?: string | null;
-  /**
-   * Chú thích bổ sung ở đáy thẻ
-   */
+  /** Chú thích bổ sung */
   subtitle?: React.ReactNode;
-  /**
-   * Callback khi người dùng nhấn vào thẻ (nếu thẻ tương tác)
-   */
+  /** Nhấn vào thẻ (thẻ tương tác) */
   onClick?: () => void;
   className?: string;
+  /** Tone của IconTile (mặc định primary) */
+  tone?: Tone;
+  /** Số chữ số thập phân khi value là số (mặc định tự suy ra, tối đa 2) */
+  decimals?: number;
+  /** Hậu tố khi value là số (VD "%", " em") */
+  suffix?: string;
+}
+
+const trendConfig: Record<TrendType, { tone: Tone; Icon: React.ElementType; srLabel: string }> = {
+  positive: { tone: "success", Icon: ArrowUpRight, srLabel: "Tăng" },
+  negative: { tone: "danger", Icon: ArrowDownRight, srLabel: "Giảm" },
+  neutral: { tone: "neutral", Icon: Minus, srLabel: "Không đổi" },
+};
+
+function inferDecimals(value: number): number {
+  if (Number.isInteger(value)) return 0;
+  const fraction = String(value).split(".")[1] ?? "";
+  return Math.min(2, Math.max(1, fraction.length));
 }
 
 /**
- * StatCard Component (§16 - 03_Component_Library & Wireframe KPI Grid §4, §19)
- * Dùng trong KPIGroup: Mobile 1 cột → Tablet 2 cột → Desktop 4 cột.
- * Hỗ trợ các trạng thái: Default, Loading (Skeleton), Error.
+ * StatCard (03 §5): Card + IconTile + giá trị CountUp + trend pill.
+ * Trạng thái: Default, Loading (Skeleton), Error; tương tác khi có onClick.
  */
 export const StatCard: React.FC<StatCardProps> = ({
   title,
@@ -60,117 +64,79 @@ export const StatCard: React.FC<StatCardProps> = ({
   subtitle,
   onClick,
   className = "",
+  tone = "primary",
+  decimals,
+  suffix = "",
 }) => {
-  // Trạng thái Loading: Page-level Skeleton theo chuẩn §18
   if (loading) {
     return (
-      <div
-        className={`bg-white p-5 rounded-[14px] border border-[#E7E5E4] shadow-xs space-y-3 ${className}`}
-        aria-busy="true"
-      >
-        <div className="flex items-center justify-between">
-          <Skeleton width="45%" height={16} />
-          <Skeleton width={36} height={36} variant="circular" />
+      <Card padding="md" className={cn("flex flex-col", className)} aria-busy="true">
+        <div className="flex items-start justify-between">
+          <Skeleton width={40} height={40} className="rounded-control" />
+          <Skeleton width={64} height={24} className="rounded-full" />
         </div>
-        <Skeleton width="60%" height={32} />
-        <Skeleton width="75%" height={14} />
-      </div>
+        <Skeleton width="55%" height={14} className="mt-4" />
+        <Skeleton width="45%" height={32} className="mt-2" />
+        <Skeleton width="70%" height={14} className="mt-2" />
+      </Card>
     );
   }
 
-  // Trạng thái Error
   if (error) {
     return (
-      <div
-        className={`bg-[#FEF2F2] p-5 rounded-[14px] border border-[#FEE2E2] shadow-xs flex flex-col justify-between ${className}`}
-      >
-        <div className="flex items-center gap-2 text-[#C73A3A] font-semibold text-[14px]">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{title}</span>
+      <Card padding="md" role="alert" className={cn("flex flex-col border-danger/30", className)}>
+        <div className="flex items-center gap-3">
+          <IconTile icon={<AlertCircle />} tone="danger" size="md" />
+          <span className="min-w-0 text-sm font-medium text-ink-2">{title}</span>
         </div>
-        <div className="text-[13px] text-[#A52D2D] mt-2">
-          {error || "Không thể tải số liệu"}
-        </div>
-      </div>
+        <p className="mt-3 text-sm text-danger">{error || "Không thể tải số liệu"}</p>
+      </Card>
     );
   }
 
-  // Cấu hình hiển thị Trend
-  const trendConfig = {
-    positive: {
-      textColor: "text-[#168154]",
-      bgColor: "bg-[#ECFDF3]",
-      Icon: TrendingUp,
-    },
-    negative: {
-      textColor: "text-[#C73A3A]",
-      bgColor: "bg-[#FEF2F2]",
-      Icon: TrendingDown,
-    },
-    neutral: {
-      textColor: "text-[#57534E]",
-      bgColor: "bg-[#F5F5F4]",
-      Icon: Minus,
-    },
-  }[trendType];
+  const { tone: trendTone, Icon: TrendIcon, srLabel } = trendConfig[trendType];
 
-  const TrendIcon = trendConfig.Icon;
+  const renderedValue =
+    typeof value === "number" ? (
+      <CountUp value={value} decimals={decimals ?? inferDecimals(value)} suffix={suffix} />
+    ) : (
+      value
+    );
 
   return (
-    <div
+    <Card
+      padding="md"
+      interactive={Boolean(onClick)}
       onClick={onClick}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onClick();
-              }
-            }
-          : undefined
-      }
-      className={`
-        bg-white p-5 rounded-[14px] border border-[#E7E5E4] shadow-xs transition-colors duration-150
-        flex flex-col justify-between
-        ${onClick ? "hover:border-[#B4232C]/40 hover:shadow-sm cursor-pointer active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-[#B4232C]/30 outline-none" : ""}
-        ${className}
-      `}
+      className={cn("flex flex-col", className)}
     >
-      <div>
-        {/* Header thẻ: Tiêu đề & Icon */}
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <span className="text-[14px] font-medium text-[#78716C] tracking-tight line-clamp-1">
-            {title}
-          </span>
-          {icon && (
-            <div className="w-10 h-10 rounded-[10px] bg-[#FFF1F2] text-[#B4232C] flex items-center justify-center shrink-0 shadow-2xs">
-              {icon}
-            </div>
-          )}
-        </div>
+      {icon ? (
+        <IconTile icon={icon} tone={tone} size="md" />
+      ) : (
+        <span className="min-w-0 text-sm font-medium text-ink-2">{title}</span>
+      )}
 
-        {/* Giá trị chính (Số liệu to, tương phản cao) */}
-        <div className="text-[28px] sm:text-[32px] font-bold text-[#1C1917] tracking-tight font-serif leading-none py-1 tabular-nums">
-          {value}
-        </div>
+      {icon && <p className="mt-4 text-sm font-medium text-ink-2">{title}</p>}
+
+      <div className={cn("text-3xl leading-tight font-bold tracking-tight text-ink tabular-nums", icon ? "mt-1" : "mt-2")}>
+        {renderedValue}
       </div>
 
-      {/* Footer: Trend hoặc Subtitle */}
-      {(trend || subtitle) && (
-        <div className="mt-3 pt-2.5 border-t border-[#F5F5F4] flex items-center justify-between text-[13px] flex-wrap gap-1.5">
-          {trend && (
-            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${trendConfig.textColor} ${trendConfig.bgColor}`}>
-              <TrendIcon className="w-3.5 h-3.5" />
-              <span>{trend}</span>
-            </div>
+      {/* Trend nằm dưới giá trị và được xuống dòng — không đẩy card rộng ra ở cột hẹp (375px) */}
+      {trend && (
+        <span
+          className={cn(
+            "mt-2 inline-flex w-fit max-w-full items-start gap-1 rounded-sm px-2 py-1 text-sm leading-snug font-semibold",
+            TONE_SOFT[trendTone]
           )}
-          {subtitle && (
-            <span className="text-[#78716C] text-[12px]">{subtitle}</span>
-          )}
-        </div>
+        >
+          <TrendIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span className="sr-only">{srLabel}:</span>
+          <span className="min-w-0 tabular-nums">{trend}</span>
+        </span>
       )}
-    </div>
+
+      {subtitle && <p className="mt-1 text-sm text-ink-3">{subtitle}</p>}
+    </Card>
   );
 };

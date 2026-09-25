@@ -1,18 +1,26 @@
-import React, { useState, useMemo, useCallback } from "react";
-import { Student, AttendanceStatus, AttendanceSaveState, ClassInfo, AttendanceSummaryData } from "../../types";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Wifi, WifiOff } from "lucide-react";
+import { Student, AttendanceStatus, AttendanceSaveState, ClassInfo } from "../../types";
+import { cn } from "../../lib/cn";
+import { formatWeekdayDate } from "../../lib/format";
+import { haptic, useReveal } from "../../lib/motion";
+import { useDraft } from "../../hooks/useDraft";
+import { usePreferences } from "../../context/PreferencesContext";
+import { Button } from "../ui/Button";
 import { PageHeader } from "../ui/PageHeader";
-import { Badge } from "../ui/Badge";
 import { useToast } from "../ui/Toast";
 import { AttendanceDateSelector, getTodayDateString } from "./AttendanceDateSelector";
 import { ClassSelector } from "./ClassSelector";
 import { AttendanceSummary } from "./AttendanceSummary";
 import { AttendanceBulkAction } from "./AttendanceBulkAction";
-import { AttendanceList } from "./AttendanceList";
+import { AttendanceList, AttendanceListFilter } from "./AttendanceList";
 import { AttendanceSaveBar } from "./AttendanceSaveBar";
-import { Wifi, WifiOff } from "lucide-react";
+import { AttendanceDraftBanner } from "./AttendanceDraftBanner";
+import { isAttendanceStatus, summarizeAttendance } from "./attendanceStatus";
 
 // ============================================================================
 // MOCK DATA: DANH SÁCH LỚP HỌC & HỌC SINH GIÁO LÝ ĐOÀN KITÔ VUA
+// (BulkScoreEntry dùng chung MOCK_CLASSES / MOCK_STUDENTS_BY_CLASS)
 // ============================================================================
 
 export const MOCK_CLASSES: ClassInfo[] = [
@@ -98,7 +106,7 @@ export const MOCK_STUDENTS_BY_CLASS: Record<string, Student[]> = {
 export function generateInitialAttendance(students: Student[]): Record<string, AttendanceStatus> {
   const result: Record<string, AttendanceStatus> = {};
   students.forEach((s, idx) => {
-    // Realistic distribution: mostly PRESENT, 1-2 ABSENT, 1 EXCUSED, 1 LATE
+    // Realistic distribution: mostly PRESENT, 1 ABSENT, 1 EXCUSED, 1 LATE
     if (idx === 1) result[s.id] = "ABSENT";
     else if (idx === 2) result[s.id] = "EXCUSED";
     else if (idx === 3) result[s.id] = "LATE";
@@ -114,350 +122,389 @@ export interface AttendancePageProps {
   className?: string;
 }
 
+type AttendanceMap = Record<string, AttendanceStatus>;
+
+/** "Máy chủ" giả lập trong phiên: dữ liệu đã lưu theo lớp + ngày. */
+const MOCK_SAVED_STORE = new Map<string, AttendanceMap>();
+
+const SAVE_LATENCY_MS = 800;
+
+function resolveClassId(classId?: string): string {
+  return classId && MOCK_CLASSES.some((c) => c.id === classId) ? classId : MOCK_CLASSES[0].id;
+}
+
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : new Date();
+}
+
+function sameMap(ids: string[], a: AttendanceMap, b: AttendanceMap): boolean {
+  return ids.every((id) => (a[id] ?? "PRESENT") === (b[id] ?? "PRESENT"));
+}
+
+/** Chế độ demo (B-GLV-08). */
+function useDemoMode(): boolean {
+  return usePreferences().demoMode;
+}
+
 /**
- * AttendancePage Component (§30 - 03_Component_Library & §8 - Sitemap)
+ * AttendancePage v2 (02 §10, 04 §8)
  *
- * Cây component bắt buộc:
  * <AttendancePage>
- * ├── <PageHeader />
- * ├── <AttendanceDateSelector />
- * ├── <ClassSelector />
- * ├── <AttendanceSummary />
- * ├── <AttendanceBulkAction />
- * ├── <AttendanceList>
- * │   └── <AttendanceRow />
- * ├── <SaveBar />
- * └── <Toast />
+ * ├── PageHeader (lớp · ngày)
+ * ├── AttendanceDateSelector + ClassSelector
+ * └── AttendanceSession (key = lớp + ngày → đổi lớp/ngày nạp lại sạch, nháp tự lưu)
+ *     ├── AttendanceDraftBanner
+ *     ├── AttendanceSummary
+ *     ├── AttendanceBulkAction (toast Hoàn tác, không hộp thoại)
+ *     ├── AttendanceList (tìm không dấu + chip lọc)
+ *     └── AttendanceSaveBar (nổi)
  *
- * QUY TẮC BẮT BUỘC:
- * - Khi lưu bị lỗi mạng: KHÔNG ĐƯỢC RESET DỮ LIỆU LOCAL đã đánh dấu!
- * - Hỗ trợ thao tác 1 chạm nhanh cho Giáo lý viên
- * - Đầy đủ các trạng thái SaveBar: NO_CHANGES, DIRTY, SAVING, SAVED, ERROR
+ * Lỗi mạng khi lưu: KHÔNG reset dữ liệu đã đánh dấu, nháp vẫn giữ trong localStorage.
  */
 export const AttendancePage: React.FC<AttendancePageProps> = ({
   onBack,
   initialClassId = "class-rl1a",
   initialDate,
-  className = "",
+  className,
 }) => {
-  const toast = useToast();
-
-  // 1. Ngày & Lớp đang chọn
+  const demoMode = useDemoMode();
   const [selectedDate, setSelectedDate] = useState<string>(initialDate || getTodayDateString());
-  const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
+  const [selectedClassId, setSelectedClassId] = useState<string>(() => resolveClassId(initialClassId));
+  const [busy, setBusy] = useState(false);
+  const [simulateNetworkError, setSimulateNetworkError] = useState(false);
 
-  // 2. Danh sách học sinh theo lớp
-  const students = useMemo(() => {
-    return MOCK_STUDENTS_BY_CLASS[selectedClassId] || MOCK_STUDENTS_BY_CLASS["class-rl1a"];
-  }, [selectedClassId]);
+  // Route đổi lớp/ngày trong khi trang vẫn mounted
+  useEffect(() => {
+    setSelectedClassId(resolveClassId(initialClassId));
+  }, [initialClassId]);
+  useEffect(() => {
+    if (initialDate) setSelectedDate(initialDate);
+  }, [initialDate]);
 
-  // 3. Trạng thái điểm danh: Initial đã lưu trên server vs Current trạng thái local
-  const [savedAttendanceMap, setSavedAttendanceMap] = useState<Record<string, AttendanceStatus>>(() => {
-    return generateInitialAttendance(students);
-  });
+  const revealRef = useReveal<HTMLDivElement>({ selector: "[data-reveal-head]" });
 
-  const [currentAttendanceMap, setCurrentAttendanceMap] = useState<Record<string, AttendanceStatus>>(() => {
-    return generateInitialAttendance(students);
-  });
-
-  // 4. Trạng thái SaveBar: NO_CHANGES | DIRTY | SAVING | SAVED | ERROR
-  const [saveState, setSaveState] = useState<AttendanceSaveState>("NO_CHANGES");
-  const [errorMessage, setErrorMessage] = useState<string>("");
-
-  // 5. Công cụ kiểm thử mạng (Simulate Network Error)
-  const [simulateNetworkError, setSimulateNetworkError] = useState<boolean>(false);
-
-  // 6. Bộ lọc hiển thị (ALL | PRESENT | ABSENT | EXCUSED | LATE)
-  const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "ALL">("ALL");
-
-  // Đổi lớp -> nạp lại dữ liệu tương ứng
-  const handleClassChange = (newClassId: string) => {
-    setSelectedClassId(newClassId);
-    const newStudents = MOCK_STUDENTS_BY_CLASS[newClassId] || [];
-    const newInitial = generateInitialAttendance(newStudents);
-    setSavedAttendanceMap(newInitial);
-    setCurrentAttendanceMap(newInitial);
-    setSaveState("NO_CHANGES");
-    setStatusFilter("ALL");
-  };
-
-  // Đổi ngày -> cập nhật và đặt lại trạng thái lưu
-  const handleDateChange = (newDate: string) => {
-    setSelectedDate(newDate);
-    const refreshed = generateInitialAttendance(students);
-    setSavedAttendanceMap(refreshed);
-    setCurrentAttendanceMap(refreshed);
-    setSaveState("NO_CHANGES");
-  };
-
-  // Đếm số lượng thay đổi chưa lưu (dirty)
-  const dirtyCount = useMemo(() => {
-    let count = 0;
-    students.forEach((s) => {
-      if (currentAttendanceMap[s.id] !== savedAttendanceMap[s.id]) {
-        count++;
-      }
-    });
-    return count;
-  }, [students, currentAttendanceMap, savedAttendanceMap]);
-
-  // Tính toán AttendanceSummaryData
-  const summaryData: AttendanceSummaryData = useMemo(() => {
-    let present = 0;
-    let absent = 0;
-    let excused = 0;
-    let late = 0;
-
-    students.forEach((s) => {
-      const st = currentAttendanceMap[s.id] || "PRESENT";
-      if (st === "PRESENT") present++;
-      else if (st === "ABSENT") absent++;
-      else if (st === "EXCUSED") excused++;
-      else if (st === "LATE") late++;
-    });
-
-    const total = students.length;
-    const presentRate = total > 0 ? (present / total) * 100 : 0;
-
-    return {
-      total,
-      present,
-      absent,
-      excused,
-      late,
-      presentRate,
-    };
-  }, [students, currentAttendanceMap]);
-
-  // Cập nhật trạng thái điểm danh cho 1 học sinh
-  const handleStatusChange = useCallback(
-    (studentId: string, nextStatus: AttendanceStatus) => {
-      setCurrentAttendanceMap((prev) => {
-        const next = { ...prev, [studentId]: nextStatus };
-        // Kiểm tra xem có thay đổi so với savedAttendanceMap không
-        const isNowDirty = Object.keys(next).some(
-          (id) => next[id] !== savedAttendanceMap[id]
-        );
-        setSaveState(isNowDirty ? "DIRTY" : "NO_CHANGES");
-        return next;
-      });
-    },
-    [savedAttendanceMap]
+  const currentClass = MOCK_CLASSES.find((c) => c.id === selectedClassId) ?? MOCK_CLASSES[0];
+  const students = useMemo(
+    () => MOCK_STUDENTS_BY_CLASS[currentClass.id] ?? [],
+    [currentClass.id]
   );
 
-  // Thao tác hàng loạt: Đánh dấu tất cả Có mặt
-  const handleMarkAllPresent = useCallback(() => {
-    const updated: Record<string, AttendanceStatus> = {};
-    students.forEach((s) => {
-      updated[s.id] = "PRESENT";
-    });
-    setCurrentAttendanceMap(updated);
-
-    const isNowDirty = Object.keys(updated).some(
-      (id) => updated[id] !== savedAttendanceMap[id]
-    );
-    setSaveState(isNowDirty ? "DIRTY" : "NO_CHANGES");
-    toast.info(`Đã chuyển toàn bộ ${students.length} em sang trạng thái [Có mặt]`);
-  }, [students, savedAttendanceMap, toast]);
-
-  // Thao tác hàng loạt: Đánh dấu tất cả Vắng
-  const handleMarkAllAbsent = useCallback(() => {
-    const updated: Record<string, AttendanceStatus> = {};
-    students.forEach((s) => {
-      updated[s.id] = "ABSENT";
-    });
-    setCurrentAttendanceMap(updated);
-
-    const isNowDirty = Object.keys(updated).some(
-      (id) => updated[id] !== savedAttendanceMap[id]
-    );
-    setSaveState(isNowDirty ? "DIRTY" : "NO_CHANGES");
-    toast.warning(`Đã chuyển toàn bộ ${students.length} em sang trạng thái [Vắng]`);
-  }, [students, savedAttendanceMap, toast]);
-
-  // Thao tác hàng loạt: Reset (Khôi phục dữ liệu ban đầu trước khi sửa)
-  const handleReset = useCallback(() => {
-    setCurrentAttendanceMap({ ...savedAttendanceMap });
-    setSaveState("NO_CHANGES");
-    toast.info("Đã hoàn tác và khôi phục trạng thái điểm danh ban đầu.");
-  }, [savedAttendanceMap, toast]);
-
-  // Lưu điểm danh lên máy chủ (Mock API Call)
-  const handleSave = async () => {
-    if (saveState === "NO_CHANGES") return;
-
-    setSaveState("SAVING");
-
-    // Giả lập độ trễ mạng 700ms
-    setTimeout(() => {
-      if (simulateNetworkError) {
-        // Lỗi mạng giả lập: QUAN TRỌNG: KHÔNG ĐƯỢC RESET currentAttendanceMap!
-        setSaveState("ERROR");
-        setErrorMessage("Lỗi kết nối mạng (Simulated). Dữ liệu đánh dấu vẫn được giữ an toàn.");
-        toast.error(
-          "Lỗi mạng: Không thể gửi dữ liệu lên máy chủ. Dữ liệu đã đánh dấu của bạn KHÔNG bị mất. Vui lòng bấm 'Thử lại'."
-        );
-      } else {
-        // Lưu thành công
-        setSavedAttendanceMap({ ...currentAttendanceMap });
-        setSaveState("SAVED");
-        toast.success(`Đã lưu thành công điểm danh ${summaryData.total} học sinh!`);
-
-        // Sau 3 giây chuyển về NO_CHANGES
-        setTimeout(() => {
-          setSaveState("NO_CHANGES");
-        }, 3000);
-      }
-    }, 700);
-  };
-
-  const currentClassInfo = MOCK_CLASSES.find((c) => c.id === selectedClassId) || MOCK_CLASSES[0];
+  const failSaves = demoMode && simulateNetworkError;
 
   return (
     <div
-      className={`min-h-screen bg-[#F5F5F4] flex flex-col font-sans pb-28 ${className}`}
+      ref={revealRef}
       data-testid="attendance-page"
+      className={cn("mx-auto w-full max-w-4xl space-y-4 sm:space-y-5", className)}
     >
-      {/* 1. PageHeader (§14, §30) */}
-      <div className="bg-white border-b border-[#E7E5E4] px-4 py-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <PageHeader
-            title="Điểm danh Giáo lý"
-            description="Điểm danh nhanh 1 chạm cho buổi học Chúa Nhật. Chạm để xoay vòng trạng thái hoặc dùng menu chọn trực tiếp."
-            showBackButton={Boolean(onBack)}
-            onBack={onBack}
-            backAriaLabel="Quay về Dashboard GLV"
-            badge={
-              <Badge variant="primary" dot>
-                {currentClassInfo.name}
-              </Badge>
-            }
-            actions={
-              /* Simulator toggles & Controls */
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSimulateNetworkError((prev) => !prev);
-                    toast.info(
-                      !simulateNetworkError
-                        ? "Đã BẬT giả lập lỗi mạng khi lưu"
-                        : "Đã TẮT giả lập lỗi mạng"
-                    );
-                  }}
-                  className={`
-                    flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-bold border transition-colors cursor-pointer
-                    ${
-                      simulateNetworkError
-                        ? "bg-[#FEF2F2] border-[#FECDD3] text-[#C73A3A]"
-                        : "bg-[#FAFAF9] border-[#E7E5E4] text-[#78716C] hover:bg-[#F5F5F4]"
-                    }
-                  `}
-                  title="Kiểm thử quy tắc: khi lưu bị lỗi mạng, KHÔNG được reset dữ liệu local đã đánh dấu"
-                >
-                  {simulateNetworkError ? (
-                    <WifiOff className="w-3.5 h-3.5 text-[#C73A3A]" />
-                  ) : (
-                    <Wifi className="w-3.5 h-3.5 text-[#168154]" />
-                  )}
-                  <span>{simulateNetworkError ? "Lỗi mạng: BẬT" : "Lỗi mạng: TẮT"}</span>
-                </button>
-              </div>
-            }
-          />
-        </div>
+      <div data-reveal-head>
+        <PageHeader
+          title="Điểm danh"
+          description={
+            <span className="inline-flex flex-wrap items-center gap-x-2">
+              <span>{currentClass.name}</span>
+              <span aria-hidden="true" className="text-ink-3">
+                ·
+              </span>
+              <span>{formatWeekdayDate(parseLocalDate(selectedDate))}</span>
+            </span>
+          }
+          showBackButton={Boolean(onBack)}
+          onBack={onBack}
+          backAriaLabel="Quay về trang chính"
+          actions={
+            demoMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                aria-pressed={simulateNetworkError}
+                onClick={() => setSimulateNetworkError((prev) => !prev)}
+                leftIcon={simulateNetworkError ? <WifiOff className="text-danger" /> : <Wifi className="text-success" />}
+                title="Chế độ demo: giả lập lỗi mạng khi lưu điểm danh"
+              >
+                {simulateNetworkError ? "Lỗi mạng: bật" : "Lỗi mạng: tắt"}
+              </Button>
+            ) : undefined
+          }
+        />
       </div>
 
-      {/* Main Container */}
-      <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 pt-5 space-y-4 flex-1">
-        {/* Banner lưu ý khi đang bật test lỗi mạng */}
-        {simulateNetworkError && (
-          <div className="p-3 bg-[#FEF2F2] border border-[#FECDD3] rounded-[12px] text-[13px] text-[#C73A3A] flex items-center justify-between">
-            <span>
-              ⚠️ Đang bật chế độ <strong>Giả lập Lỗi Mạng</strong> để kiểm tra tính toàn vẹn: Dữ liệu local không bao giờ bị xóa khi lưu thất bại.
-            </span>
-            <button
-              type="button"
-              onClick={() => setSimulateNetworkError(false)}
-              className="text-[12px] underline font-bold ml-2 cursor-pointer"
-            >
-              Tắt ngay
-            </button>
-          </div>
-        )}
+      {failSaves && (
+        <p
+          data-reveal-head
+          role="status"
+          className="flex items-center gap-2 rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-ink"
+        >
+          <WifiOff className="size-4 shrink-0 text-warning" aria-hidden="true" />
+          Đang giả lập lỗi mạng: lần lưu tiếp theo sẽ thất bại, dữ liệu vẫn được giữ.
+        </p>
+      )}
 
-        {/* 2. AttendanceDateSelector */}
-        <section aria-label="Bộ chọn ngày điểm danh">
-          <AttendanceDateSelector
-            selectedDate={selectedDate}
-            onDateChange={handleDateChange}
-            disabled={saveState === "SAVING"}
+      <div data-reveal-head className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_16rem] md:items-end md:gap-4">
+        <AttendanceDateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} disabled={busy} />
+        <ClassSelector
+          classes={MOCK_CLASSES}
+          selectedClassId={currentClass.id}
+          onSelectClass={(id) => setSelectedClassId(resolveClassId(id))}
+          disabled={busy}
+        />
+      </div>
+
+      <AttendanceSession
+        key={`${currentClass.id}|${selectedDate}`}
+        classInfo={currentClass}
+        date={selectedDate}
+        students={students}
+        failSaves={failSaves}
+        onBusyChange={setBusy}
+      />
+    </div>
+  );
+};
+
+// ============================================================================
+// SESSION: một buổi điểm danh (lớp + ngày)
+// ============================================================================
+
+interface AttendanceSessionProps {
+  classInfo: ClassInfo;
+  date: string;
+  students: Student[];
+  failSaves: boolean;
+  onBusyChange: (busy: boolean) => void;
+}
+
+type SavePhase = "IDLE" | "SAVING" | "SAVED" | "ERROR";
+
+const AttendanceSession: React.FC<AttendanceSessionProps> = ({ classInfo, date, students, failSaves, onBusyChange }) => {
+  const toast = useToast();
+  const sessionKey = `${classInfo.id}.${date}`;
+  const studentIds = useMemo(() => students.map((s) => s.id), [students]);
+
+  // Dữ liệu đã lưu ("máy chủ") và dữ liệu đang đánh dấu trên máy
+  const [saved, setSaved] = useState<AttendanceMap>(
+    () => MOCK_SAVED_STORE.get(sessionKey) ?? generateInitialAttendance(students)
+  );
+  const [current, setCurrent] = useState<AttendanceMap>(saved);
+  const [phase, setPhase] = useState<SavePhase>("IDLE");
+  const [errorMessage, setErrorMessage] = useState<string>();
+  const [statusFilter, setStatusFilter] = useState<AttendanceListFilter>("ALL");
+  const [draftHandled, setDraftHandled] = useState(false);
+
+  const { draft, saveDraft, clearDraft } = useDraft<AttendanceMap>(`qlgl.draft.attendance.${classInfo.id}.${date}`);
+
+  const mountedRef = useRef(true);
+  const timers = useRef<number[]>([]);
+  useEffect(() => {
+    mountedRef.current = true;
+    const pending = timers.current;
+    return () => {
+      mountedRef.current = false;
+      pending.forEach((t) => window.clearTimeout(t));
+    };
+  }, []);
+
+  const later = (fn: () => void, ms: number) => {
+    timers.current.push(window.setTimeout(() => mountedRef.current && fn(), ms));
+  };
+
+  const dirtyCount = useMemo(
+    () => studentIds.filter((id) => (current[id] ?? "PRESENT") !== (saved[id] ?? "PRESENT")).length,
+    [studentIds, current, saved]
+  );
+  const isDirty = dirtyCount > 0;
+
+  const summary = useMemo(() => summarizeAttendance(studentIds, current), [studentIds, current]);
+
+  const saveState: AttendanceSaveState =
+    phase === "SAVING"
+      ? "SAVING"
+      : phase === "ERROR" && isDirty
+      ? "ERROR"
+      : phase === "SAVED" && !isDirty
+      ? "SAVED"
+      : isDirty
+      ? "DIRTY"
+      : "NO_CHANGES";
+  const isSaving = saveState === "SAVING";
+
+  useEffect(() => {
+    onBusyChange(isSaving);
+  }, [isSaving, onBusyChange]);
+  useEffect(() => () => onBusyChange(false), [onBusyChange]);
+
+  // ---- Bản nháp (B-GLV-04) ----
+  const draftChangedCount = useMemo(() => {
+    if (!draft) return 0;
+    return studentIds.filter((id) => {
+      const value = draft.data[id];
+      return isAttendanceStatus(value) && value !== (saved[id] ?? "PRESENT");
+    }).length;
+  }, [draft, studentIds, saved]);
+  const showDraftBanner = Boolean(draft) && !draftHandled && draftChangedCount > 0;
+
+  // Mỗi thay đổi khi đang "dirty" → ghi nháp; hết dirty (và không chờ quyết định banner) → xóa nháp
+  useEffect(() => {
+    if (isDirty) saveDraft(current);
+    else if (!showDraftBanner) clearDraft();
+  }, [current, isDirty, showDraftBanner, saveDraft, clearDraft]);
+
+  const handleRestoreDraft = () => {
+    if (!draft) return;
+    const next: AttendanceMap = { ...saved };
+    studentIds.forEach((id) => {
+      const value = draft.data[id];
+      if (isAttendanceStatus(value)) next[id] = value;
+    });
+    setCurrent(next);
+    setPhase("IDLE");
+    setDraftHandled(true);
+    toast.success(`Đã khôi phục bản nháp (${draftChangedCount} em có thay đổi)`);
+  };
+
+  const handleDismissDraft = () => {
+    setDraftHandled(true);
+    clearDraft();
+  };
+
+  // ---- Đổi trạng thái từng em (B-GLV-02) ----
+  const handleStatusChange = useCallback((studentId: string, next: AttendanceStatus) => {
+    setCurrent((prev) => (prev[studentId] === next ? prev : { ...prev, [studentId]: next }));
+    setPhase((p) => (p === "SAVING" ? p : "IDLE"));
+  }, []);
+
+  // ---- Thao tác hàng loạt + Hoàn tác (B-GLV-03) ----
+  const applyBulk = (next: AttendanceMap, message: string, unchangedMessage: string) => {
+    if (sameMap(studentIds, current, next)) {
+      toast.info(unchangedMessage);
+      return;
+    }
+    const previous = current;
+    haptic();
+    setCurrent(next);
+    setPhase("IDLE");
+    toast.success(message, {
+      action: {
+        label: "Hoàn tác",
+        onClick: () => {
+          if (!mountedRef.current) return;
+          setCurrent(previous);
+          setPhase("IDLE");
+        },
+      },
+    });
+  };
+
+  const markAll = (status: AttendanceStatus): AttendanceMap => {
+    const next: AttendanceMap = { ...current };
+    studentIds.forEach((id) => {
+      next[id] = status;
+    });
+    return next;
+  };
+
+  const handleMarkAllPresent = () =>
+    applyBulk(markAll("PRESENT"), `Đã đánh dấu ${studentIds.length} em có mặt`, "Cả lớp đã được đánh dấu có mặt");
+
+  const handleMarkAllAbsent = () =>
+    applyBulk(markAll("ABSENT"), `Đã đánh dấu ${studentIds.length} em vắng`, "Cả lớp đã được đánh dấu vắng");
+
+  const handleReset = () =>
+    applyBulk({ ...saved }, "Đã đặt lại theo dữ liệu đã lưu", "Không có thay đổi để đặt lại");
+
+  // ---- Lưu (lỗi mạng giữ nguyên dữ liệu) ----
+  const handleSave = () => {
+    if (!isDirty || isSaving) return;
+    const snapshot: AttendanceMap = { ...current };
+    setPhase("SAVING");
+    setErrorMessage(undefined);
+
+    later(() => {
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      if (failSaves || offline) {
+        setPhase("ERROR");
+        setErrorMessage("Không kết nối được máy chủ. Dữ liệu vẫn được giữ trên máy.");
+        toast.error("Chưa lưu được điểm danh. Dữ liệu vẫn được giữ, hãy bấm Thử lại.");
+        return;
+      }
+      MOCK_SAVED_STORE.set(sessionKey, snapshot);
+      setSaved(snapshot);
+      setCurrent(snapshot);
+      clearDraft();
+      setDraftHandled(true);
+      setPhase("SAVED");
+      const savedSummary = summarizeAttendance(studentIds, snapshot);
+      toast.success(`${classInfo.name} · ${savedSummary.present}/${savedSummary.total} em có mặt`, {
+        title: "Đã lưu điểm danh",
+      });
+      later(() => setPhase((p) => (p === "SAVED" ? "IDLE" : p)), 2800);
+    }, SAVE_LATENCY_MS);
+  };
+
+  const revealRef = useReveal<HTMLDivElement>();
+
+  return (
+    <div ref={revealRef} className="space-y-4 sm:space-y-5">
+      {showDraftBanner && draft && (
+        <div data-reveal>
+          <AttendanceDraftBanner
+            savedAt={draft.savedAt}
+            changedCount={draftChangedCount}
+            onRestore={handleRestoreDraft}
+            onDismiss={handleDismissDraft}
           />
-        </section>
+        </div>
+      )}
 
-        {/* 3. ClassSelector */}
-        <section aria-label="Bộ chọn lớp học">
-          <ClassSelector
-            classes={MOCK_CLASSES}
-            selectedClassId={selectedClassId}
-            onSelectClass={handleClassChange}
-            disabled={saveState === "SAVING"}
-          />
-        </section>
+      <section data-reveal aria-label="Tổng quan buổi điểm danh">
+        <AttendanceSummary
+          summary={summary}
+          activeFilter={statusFilter === "NOT_PRESENT" ? "ALL" : statusFilter}
+          onFilterChange={setStatusFilter}
+        />
+      </section>
 
-        {/* 4. AttendanceSummary */}
-        <section aria-label="Thống kê chuyên cần">
-          <AttendanceSummary
-            summary={summaryData}
-            activeFilter={statusFilter}
-            onFilterChange={setStatusFilter}
-          />
-        </section>
+      <section data-reveal aria-label="Thao tác nhanh cho cả lớp">
+        <AttendanceBulkAction
+          onMarkAllPresent={handleMarkAllPresent}
+          onMarkAllAbsent={handleMarkAllAbsent}
+          onReset={handleReset}
+          disabled={isSaving}
+          hasChanges={isDirty}
+        />
+      </section>
 
-        {/* 5. AttendanceBulkAction */}
-        <section aria-label="Thao tác nhanh hàng loạt">
-          <AttendanceBulkAction
-            onMarkAllPresent={handleMarkAllPresent}
-            onMarkAllAbsent={handleMarkAllAbsent}
-            onReset={handleReset}
-            disabled={saveState === "SAVING"}
-            hasChanges={dirtyCount > 0}
-          />
-        </section>
+      <section data-reveal aria-labelledby="attendance-list-heading" className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1">
+          <h2 id="attendance-list-heading" className="text-lg font-semibold tracking-tight text-ink">
+            Danh sách lớp <span className="font-mono text-base font-medium text-ink-3">{students.length}</span>
+          </h2>
+          <p className="text-sm text-ink-3 md:hidden">Chạm vào trạng thái để đổi</p>
+        </div>
+        <AttendanceList
+          students={students}
+          attendanceMap={current}
+          initialAttendanceMap={saved}
+          onStatusChange={handleStatusChange}
+          disabled={isSaving}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+        />
+      </section>
 
-        {/* 6. AttendanceList (chứa các AttendanceRow) */}
-        <section aria-label="Danh sách học sinh điểm danh">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-[16px] font-bold text-[#1C1917] font-serif">
-                Danh sách học sinh ({students.length} em)
-              </h2>
-              <span className="text-[12px] text-[#78716C]">
-                Chạm nút để đổi: Có mặt → Vắng → Có phép → Đi muộn
-              </span>
-            </div>
+      {/* Chừa chỗ để hàng cuối không bị SaveBar nổi che */}
+      <div aria-hidden="true" className="h-24" />
 
-            <AttendanceList
-              students={students}
-              attendanceMap={currentAttendanceMap}
-              initialAttendanceMap={savedAttendanceMap}
-              onStatusChange={handleStatusChange}
-              disabled={saveState === "SAVING"}
-              statusFilter={statusFilter}
-            />
-          </div>
-        </section>
-      </main>
-
-      {/* 7. Attendance SaveBar (Sticky footer) */}
       <AttendanceSaveBar
-        totalStudents={summaryData.total}
-        markedCount={summaryData.total}
+        totalStudents={summary.total}
+        markedCount={summary.total}
         dirtyCount={dirtyCount}
         state={saveState}
         onSave={handleSave}
         onRetry={handleSave}
         errorMessage={errorMessage}
+        summary={summary}
       />
     </div>
   );

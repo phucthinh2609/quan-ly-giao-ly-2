@@ -1,10 +1,10 @@
-import React, { useState } from "react";
-import { SlidersHorizontal, RotateCcw, Check } from "lucide-react";
+import React, { useId, useState } from "react";
+import { SlidersHorizontal, RotateCcw, Check, X } from "lucide-react";
 import { SearchBar } from "./SearchBar";
 import { Button } from "./Button";
-import { Badge } from "./Badge";
 import { BottomSheet } from "./BottomSheet";
 import { Select } from "./Select";
+import { cn } from "../../lib/cn";
 
 export interface FilterOption {
   value: string;
@@ -22,49 +22,79 @@ export interface FilterConfig {
 }
 
 export interface FilterBarProps {
-  /**
-   * Từ khóa tìm kiếm
-   */
+  /** Từ khóa tìm kiếm */
   searchQuery?: string;
-  /**
-   * Placeholder ô tìm kiếm
-   */
+  /** Placeholder ô tìm kiếm */
   searchPlaceholder?: string;
-  /**
-   * Callback khi từ khóa tìm kiếm thay đổi
-   */
+  /** Gọi khi từ khóa tìm kiếm thay đổi */
   onSearchChange?: (val: string) => void;
-  /**
-   * Callback xóa trắng tìm kiếm
-   */
+  /** Gọi khi xóa trắng tìm kiếm */
   onSearchClear?: () => void;
-  /**
-   * Danh sách cấu hình các bộ lọc
-   */
+  /** Danh sách cấu hình bộ lọc */
   filters?: FilterConfig[];
-  /**
-   * Số lượng bộ lọc đang hoạt động (active)
-   */
+  /** Số bộ lọc đang áp dụng (nếu không truyền sẽ tự tính) */
   activeFiltersCount?: number;
-  /**
-   * Callback xóa toàn bộ bộ lọc về mặc định
-   */
+  /** Xóa toàn bộ bộ lọc về mặc định */
   onClearAll?: () => void;
-  /**
-   * Các nút hành động phụ (như Xuất Excel, Thêm mới)
-   */
+  /** Hành động phụ (Xuất Excel, Thêm mới...) */
   actions?: React.ReactNode;
-  /**
-   * Tiêu đề của BottomSheet khi mở trên Mobile
-   */
+  /** Tiêu đề BottomSheet trên mobile */
   mobileFilterTitle?: string;
   className?: string;
 }
 
+const isActiveValue = (value: string) => Boolean(value) && value !== "all";
+
+/** Giá trị "không lọc" của một bộ lọc: ưu tiên option "all" nếu có, ngược lại chuỗi rỗng. */
+const resetValueOf = (filter: FilterConfig) => (filter.options.some((opt) => opt.value === "all") ? "all" : "");
+
+/** Nhóm chip chọn nhanh trong BottomSheet (1 chạm, không mở thêm lớp chọn). */
+const FilterChipGroup: React.FC<{ filter: FilterConfig }> = ({ filter }) => {
+  const labelId = useId();
+  const hasAllOption = filter.options.some((opt) => !isActiveValue(opt.value));
+  const resetValue = resetValueOf(filter);
+  const chips: FilterOption[] = hasAllOption ? filter.options : [{ value: resetValue, label: "Tất cả" }, ...filter.options];
+
+  return (
+    <div role="group" aria-labelledby={labelId} className="space-y-2.5">
+      <p id={labelId} className="text-sm font-semibold text-ink-2">
+        {filter.label}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {chips.map((opt) => {
+          const selected = isActiveValue(opt.value)
+            ? filter.value === opt.value
+            : !isActiveValue(filter.value);
+          return (
+            <button
+              key={`${filter.id}-${opt.value || "all"}`}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => filter.onChange(selected && isActiveValue(opt.value) ? resetValue : opt.value)}
+              className={cn(
+                "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-base font-medium",
+                "transition-[background-color,border-color,color,transform] duration-150 ease-out-soft active:scale-[0.97]",
+                "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50",
+                selected
+                  ? "border-night bg-night text-on-night"
+                  : "border-line-strong bg-surface text-ink hover:bg-surface-2"
+              )}
+            >
+              {selected && <Check className="size-4 shrink-0" aria-hidden="true" />}
+              <span>{opt.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /**
- * FilterBar Component (§15, §20 - 03_Component_Library & Wireframe Responsive Matrix)
- * - Desktop (≥768px): Hiển thị Filter inline cùng thanh tìm kiếm và hành động.
- * - Mobile (<768px): Hiển thị Search + nút "Bộ lọc" mở BottomSheet trượt từ dưới lên.
+ * FilterBar (03 §5, 04 §20)
+ * - Desktop (>= md): tìm kiếm + bộ lọc dạng Select inline + hành động.
+ * - Mobile (< md): tìm kiếm + nút "Bộ lọc (n)" mở BottomSheet với chip chọn nhanh.
+ * - Hàng chip bộ lọc đang áp dụng, xóa được từng cái.
  */
 export const FilterBar: React.FC<FilterBarProps> = ({
   searchQuery = "",
@@ -80,165 +110,157 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 }) => {
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
 
-  // Tính số lượng bộ lọc đang chọn nếu không truyền activeFiltersCount
-  const calculatedActiveCount =
-    activeFiltersCount > 0
-      ? activeFiltersCount
-      : filters.filter((f) => f.value && f.value !== "" && f.value !== "all").length;
+  const activeFilters = filters.filter((f) => isActiveValue(f.value));
+  const calculatedActiveCount = activeFiltersCount > 0 ? activeFiltersCount : activeFilters.length;
+
+  const handleClearAll = () => {
+    if (onClearAll) onClearAll();
+    else filters.forEach((f) => isActiveValue(f.value) && f.onChange(resetValueOf(f)));
+  };
+
+  const canClear = calculatedActiveCount > 0;
 
   return (
-    <div className={`space-y-3 ${className}`}>
-      {/* Container chính: Responsive Flex/Grid */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-[12px] border border-[#E7E5E4] shadow-xs">
-        {/* Phần 1: Search & Nút Bộ lọc trên Mobile */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className={cn("space-y-3", className)}>
+      <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-3 shadow-xs sm:p-4 md:flex-row md:items-center md:justify-between">
+        {/* Tìm kiếm + nút Bộ lọc (mobile) */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {onSearchChange && (
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <SearchBar
                 value={searchQuery}
                 placeholder={searchPlaceholder}
                 onChange={onSearchChange}
                 onClear={onSearchClear}
                 size="md"
+                className="md:min-h-12"
               />
             </div>
           )}
 
-          {/* Nút Bộ lọc CHỈ xuất hiện trên Mobile (< 768px) khi có bộ lọc */}
           {filters.length > 0 && (
-            <div className="block md:hidden shrink-0">
+            <div className={cn("shrink-0 md:hidden", !onSearchChange && "w-full")}>
               <Button
-                variant={calculatedActiveCount > 0 ? "primary" : "outline"}
+                variant={canClear ? "primary" : "outline"}
                 size="md"
+                fullWidth={!onSearchChange}
                 onClick={() => setIsMobileSheetOpen(true)}
-                leftIcon={<SlidersHorizontal className="w-4 h-4" />}
-                className="whitespace-nowrap"
+                leftIcon={<SlidersHorizontal />}
+                aria-haspopup="dialog"
+                aria-expanded={isMobileSheetOpen}
               >
-                Bộ lọc
-                {calculatedActiveCount > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-[11px] font-bold rounded-full bg-white text-[#B4232C]">
-                    {calculatedActiveCount}
-                  </span>
-                )}
+                {canClear ? `Bộ lọc (${calculatedActiveCount})` : "Bộ lọc"}
               </Button>
             </div>
           )}
         </div>
 
-        {/* Phần 2: Inline Filters trên Desktop (≥ 768px) */}
+        {/* Bộ lọc inline (desktop) */}
         {filters.length > 0 && (
-          <div className="hidden md:flex items-center gap-2 flex-wrap">
+          <div className="hidden flex-wrap items-center gap-2 md:flex">
             {filters.map((filter) => (
-              <div key={filter.id} className="min-w-[150px] max-w-[210px]">
+              <div key={filter.id} className="w-44 lg:w-52">
                 <Select
                   value={filter.value}
                   options={filter.options}
                   placeholder={filter.placeholder || filter.label}
+                  ariaLabel={filter.label}
                   onChange={filter.onChange}
                 />
               </div>
             ))}
 
-            {calculatedActiveCount > 0 && onClearAll && (
-              <Button
-                variant="ghost"
-                size="md"
-                onClick={onClearAll}
-                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-                className="text-[#78716C] hover:text-[#B4232C]"
-              >
+            {canClear && onClearAll && (
+              <Button variant="ghost" size="md" onClick={onClearAll} leftIcon={<RotateCcw />}>
                 Đặt lại
               </Button>
             )}
           </div>
         )}
 
-        {/* Phần 3: Custom Actions (Xuất Excel, Thêm mới, v.v.) */}
+        {/* Hành động phụ */}
         {actions && (
-          <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 pt-2 md:pt-0 border-[#E7E5E4]">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line pt-3 md:border-t-0 md:pt-0">
             {actions}
           </div>
         )}
       </div>
 
-      {/* Hiển thị tóm tắt các filter đang chọn trên Desktop/Mobile nếu có */}
-      {calculatedActiveCount > 0 && (
-        <div className="flex items-center gap-2 flex-wrap px-1 text-[13px] text-[#78716C]">
-          <span className="font-medium">Đang lọc theo:</span>
-          {filters
-            .filter((f) => f.value && f.value !== "" && f.value !== "all")
-            .map((f) => {
-              const matchedOption = f.options.find((opt) => opt.value === f.value);
-              return (
-                <Badge
-                  key={f.id}
-                  variant="neutral"
-                  size="sm"
-                  className="bg-[#F5F5F4] text-[#292524] border border-[#E7E5E4]"
+      {/* Chip bộ lọc đang áp dụng */}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          <span className="text-sm font-medium text-ink-3">Đang lọc:</span>
+          {activeFilters.map((f) => {
+            const matchedOption = f.options.find((opt) => opt.value === f.value);
+            const valueLabel = matchedOption ? matchedOption.label : f.value;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => f.onChange(resetValueOf(f))}
+                aria-label={`Bỏ lọc ${f.label}: ${valueLabel}`}
+                className={cn(
+                  "group inline-flex min-h-11 items-center gap-1.5 rounded-full bg-surface-2 pr-2 pl-3.5 text-sm md:min-h-9",
+                  "transition-colors duration-150 hover:bg-surface-3",
+                  "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50"
+                )}
+              >
+                <span className="text-ink-3">{f.label}:</span>
+                <span className="font-semibold text-ink">{valueLabel}</span>
+                <span
+                  className="ml-0.5 inline-flex size-5 items-center justify-center rounded-full text-ink-3 group-hover:bg-surface group-hover:text-ink"
+                  aria-hidden="true"
                 >
-                  <span className="text-[#78716C] font-normal mr-1">{f.label}:</span>
-                  <span className="font-semibold">{matchedOption ? matchedOption.label : f.value}</span>
-                </Badge>
-              );
-            })}
+                  <X className="size-3.5" />
+                </span>
+              </button>
+            );
+          })}
           {onClearAll && (
             <button
+              type="button"
               onClick={onClearAll}
-              className="text-[#B4232C] hover:underline font-medium text-[13px] ml-1 cursor-pointer"
+              className="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-semibold text-primary-ink hover:underline md:min-h-9"
             >
-              Xóa tất cả bộ lọc
+              Xóa tất cả
             </button>
           )}
         </div>
       )}
 
-      {/* Mobile BottomSheet chứa các Bộ lọc */}
+      {/* Mobile: BottomSheet chứa bộ lọc */}
       <BottomSheet
         isOpen={isMobileSheetOpen}
         onClose={() => setIsMobileSheetOpen(false)}
         title={mobileFilterTitle}
-        description="Lựa chọn các điều kiện lọc để thu hẹp danh sách"
+        description="Chọn điều kiện để thu hẹp danh sách"
         footer={
-          <div className="flex items-center gap-3 w-full">
-            {onClearAll && (
-              <Button
-                variant="outline"
-                size="lg"
-                fullWidth
-                onClick={() => {
-                  onClearAll();
-                  setIsMobileSheetOpen(false);
-                }}
-                leftIcon={<RotateCcw className="w-4 h-4" />}
-              >
-                Đặt lại
-              </Button>
-            )}
+          <div className="flex w-full items-center gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              fullWidth
+              disabled={!canClear}
+              onClick={handleClearAll}
+              leftIcon={<RotateCcw />}
+            >
+              Đặt lại
+            </Button>
             <Button
               variant="primary"
               size="lg"
               fullWidth
               onClick={() => setIsMobileSheetOpen(false)}
-              leftIcon={<Check className="w-4 h-4" />}
+              leftIcon={<Check />}
             >
-              Áp dụng ({calculatedActiveCount})
+              {canClear ? `Áp dụng (${calculatedActiveCount})` : "Xong"}
             </Button>
           </div>
         }
       >
-        <div className="space-y-4 py-2">
+        <div className="space-y-6 pb-2">
           {filters.map((filter) => (
-            <div key={filter.id} className="space-y-1.5">
-              <label className="text-[14px] font-semibold text-[#1C1917] block">
-                {filter.label}
-              </label>
-              <Select
-                value={filter.value}
-                options={filter.options}
-                placeholder={filter.placeholder || `Tất cả ${filter.label.toLowerCase()}`}
-                onChange={filter.onChange}
-              />
-            </div>
+            <FilterChipGroup key={filter.id} filter={filter} />
           ))}
         </div>
       </BottomSheet>

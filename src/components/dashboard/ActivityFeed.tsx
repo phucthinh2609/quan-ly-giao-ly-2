@@ -1,7 +1,13 @@
 import React from "react";
-import { Clock, CheckCircle2, FileEdit, Bell, Shield, ArrowRight } from "lucide-react";
+import { ArrowRight, Bell, CheckCircle2, History, PenLine, Shield, UserPlus } from "lucide-react";
 import { Avatar } from "../ui/Avatar";
-import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { IconTile } from "../ui/IconTile";
+import { TONE_BG, TONE_TEXT, Tone } from "../ui/tone";
+import { cn } from "../../lib/cn";
+import { relativeTime } from "../../lib/format";
+import { SectionHeader } from "./SectionHeader";
 
 export type ActivityType = "attendance" | "score" | "notification" | "system" | "user";
 
@@ -20,7 +26,7 @@ export interface ActivityItem {
    */
   userAvatar?: string | null;
   /**
-   * Vai trò người thực hiện (GLV, ADMIN, ...)
+   * Vai trò người thực hiện (GLV, Quản trị, ...)
    */
   userRole?: string;
   /**
@@ -32,9 +38,13 @@ export interface ActivityItem {
    */
   target: string;
   /**
-   * Thời gian thực hiện tương đối (Time - VD: 10 phút trước)
+   * Thời gian hiển thị sẵn (VD: 10 phút trước) — dùng khi không có timestamp
    */
   time: string;
+  /**
+   * Thời điểm ISO (tùy chọn). Khi có, hiển thị bằng thời gian tương đối tự tính.
+   */
+  timestamp?: string;
   /**
    * Phân loại hành động
    */
@@ -51,6 +61,10 @@ export interface ActivityFeedProps {
    */
   title?: string;
   /**
+   * Mô tả ngắn dưới tiêu đề (tùy chọn)
+   */
+  description?: string;
+  /**
    * Số lượng hiển thị tối đa
    */
   maxItems?: number;
@@ -58,113 +72,135 @@ export interface ActivityFeedProps {
    * Callback khi nhấn "Xem tất cả"
    */
   onViewAll?: () => void;
+  /**
+   * "card" (mặc định) bọc trong Card có tiêu đề; "plain" chỉ hiển thị dòng thời gian
+   */
+  variant?: "card" | "plain";
+  /**
+   * Thông điệp khi chưa có hoạt động
+   */
+  emptyMessage?: string;
   className?: string;
 }
 
-const getActivityIcon = (type?: ActivityType) => {
-  switch (type) {
-    case "attendance":
-      return <CheckCircle2 className="w-3.5 h-3.5 text-[#168154]" />;
-    case "score":
-      return <FileEdit className="w-3.5 h-3.5 text-[#2563EB]" />;
-    case "notification":
-      return <Bell className="w-3.5 h-3.5 text-[#B4232C]" />;
-    case "system":
-    default:
-      return <Shield className="w-3.5 h-3.5 text-[#78716C]" />;
+const TYPE_META: Record<ActivityType, { tone: Tone; label: string; icon: React.ReactNode }> = {
+  attendance: { tone: "success", label: "Điểm danh", icon: <CheckCircle2 aria-hidden="true" /> },
+  score: { tone: "info", label: "Điểm số", icon: <PenLine aria-hidden="true" /> },
+  notification: { tone: "primary", label: "Thông báo", icon: <Bell aria-hidden="true" /> },
+  user: { tone: "gold", label: "Tài khoản", icon: <UserPlus aria-hidden="true" /> },
+  system: { tone: "neutral", label: "Hệ thống", icon: <Shield aria-hidden="true" /> },
+};
+
+const displayName = (item: ActivityItem) =>
+  item.christianName ? `${item.christianName} ${item.userName}` : item.userName;
+
+const timeLabel = (item: ActivityItem) => {
+  if (item.timestamp) {
+    const relative = relativeTime(item.timestamp);
+    if (relative) return relative;
   }
+  return item.time;
 };
 
 /**
- * ActivityFeed Component (§25 03_Component_Library & Wireframe A §4–5)
- *
- * Hiển thị luồng hoạt động thời gian thực:
- * Cấu trúc bắt buộc: User + Action + Target + Time
+ * ActivityFeed (03 §11) — dòng thời gian dọc: chấm tone + avatar + "Ai · làm gì · ở đâu" + thời gian tương đối.
  */
 export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   activities,
   title = "Hoạt động gần đây",
+  description,
   maxItems = 5,
   onViewAll,
-  className = "",
+  variant = "card",
+  emptyMessage = "Chưa có hoạt động nào được ghi nhận gần đây.",
+  className,
 }) => {
-  const displayedActivities = activities.slice(0, maxItems);
+  const displayed = activities.slice(0, maxItems);
+
+  const list =
+    displayed.length === 0 ? (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
+        <IconTile icon={<History />} tone="neutral" size="lg" />
+        <p className="max-w-xs text-sm text-ink-3">{emptyMessage}</p>
+      </div>
+    ) : (
+      <ol className="relative">
+        {displayed.map((item) => {
+          const meta = TYPE_META[item.type ?? "system"];
+          return (
+            <li
+              key={item.id}
+              className={cn(
+                "relative flex gap-3 pb-5 last:pb-0",
+                // Đường nối dọc của timeline: nối từ chấm này tới chấm kế tiếp
+                "before:absolute before:top-0 before:bottom-0 before:left-[0.3125rem] before:w-px before:bg-line",
+                "first:before:top-4 last:before:bottom-auto last:before:h-4 only:before:hidden"
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn("relative mt-3.5 size-2.5 shrink-0 rounded-full ring-4 ring-surface", TONE_BG[meta.tone])}
+              />
+              <Avatar name={item.userName} src={item.userAvatar || undefined} size="sm" className="shrink-0" />
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-sm leading-snug text-ink-2">
+                  <span className="font-semibold text-ink">{displayName(item)}</span>
+                  <span aria-hidden="true" className="text-ink-3">
+                    {" "}
+                    ·{" "}
+                  </span>
+                  <span>{item.action}</span>
+                  <span aria-hidden="true" className="text-ink-3">
+                    {" "}
+                    ·{" "}
+                  </span>
+                  <span className="font-medium text-ink">{item.target}</span>
+                </p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-ink-3">
+                  <span className={cn("inline-flex items-center gap-1 font-medium [&_svg]:size-3.5", TONE_TEXT[meta.tone])}>
+                    {meta.icon}
+                    {meta.label}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <time dateTime={item.timestamp}>{timeLabel(item)}</time>
+                  {item.userRole && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{item.userRole}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    );
+
+  if (variant === "plain") {
+    return <div className={className}>{list}</div>;
+  }
 
   return (
-    <div
-      className={`bg-white rounded-[14px] border border-[#E7E5E4] p-4 sm:p-5 shadow-xs flex flex-col justify-between ${className}`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#F5F5F4]">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[#FAFAF9] border border-[#E7E5E4] flex items-center justify-center text-[#78716C]">
-            <Clock className="w-4 h-4" />
-          </div>
-          <h3 className="text-[16px] sm:text-[17px] font-bold text-[#1C1917] font-serif">
-            {title}
-          </h3>
-        </div>
-        {onViewAll && (
-          <button
-            type="button"
-            onClick={onViewAll}
-            className="text-[12px] font-semibold text-[#B4232C] hover:text-[#941D25] flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <span>Xem tất cả</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        )}
-      </div>
-
-      {/* Feed list */}
-      <div className="mt-3 divide-y divide-[#F5F5F4]">
-        {displayedActivities.length === 0 ? (
-          <div className="py-8 text-center text-[#A8A29E] text-[13px]">
-            Chưa có hoạt động nào được ghi nhận gần đây.
-          </div>
-        ) : (
-          displayedActivities.map((item) => (
-            <div
-              key={item.id}
-              className="py-3 first:pt-1 last:pb-1 flex items-start gap-3 transition-colors hover:bg-[#FAFAF9]/60 px-1 rounded-lg"
+    <Card padding="md" className={cn("flex flex-col gap-4", className)}>
+      <SectionHeader
+        title={title}
+        description={description}
+        icon={<History />}
+        action={
+          onViewAll ? (
+            <Button
+              variant="ghost"
+              onClick={onViewAll}
+              rightIcon={<ArrowRight />}
+              className="-mr-3 px-3 text-primary-ink hover:text-primary-ink"
             >
-              {/* User Avatar */}
-              <div className="relative flex-shrink-0 pt-0.5">
-                <Avatar
-                  name={item.userName}
-                  src={item.userAvatar || undefined}
-                  size="sm"
-                />
-                <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs border border-[#E7E5E4]">
-                  {getActivityIcon(item.type)}
-                </div>
-              </div>
-
-              {/* Activity Details: User + Action + Target + Time */}
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-baseline gap-1 text-[13.5px] text-[#292524]">
-                  <span className="font-semibold text-[#1C1917]">
-                    {item.christianName ? `${item.christianName} ${item.userName}` : item.userName}
-                  </span>
-                  {item.userRole && (
-                    <Badge variant="neutral" size="sm" className="text-[10px] px-1.5 py-0">
-                      {item.userRole}
-                    </Badge>
-                  )}
-                  <span className="text-[#57534E]">{item.action}</span>
-                  <span className="font-semibold text-[#B4232C] bg-[#FFF1F2] px-1.5 py-0.2 rounded text-[12.5px] border border-[#FECDD3]/50">
-                    {item.target}
-                  </span>
-                </div>
-                <div className="mt-1 flex items-center gap-1 text-[11.5px] text-[#A8A29E]">
-                  <Clock className="w-3 h-3" />
-                  <span>{item.time}</span>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+              Xem tất cả
+            </Button>
+          ) : undefined
+        }
+      />
+      {list}
+    </Card>
   );
 };

@@ -1,6 +1,11 @@
 import React, { useState } from "react";
-import { ChevronDown, Check, RefreshCw } from "lucide-react";
+import { Check, ChevronDown, Users } from "lucide-react";
 import { LinkedStudent } from "../../types";
+import { cn } from "../../lib/cn";
+import { haptic } from "../../lib/motion";
+import { Avatar } from "../ui/Avatar";
+import { BottomSheet } from "../ui/BottomSheet";
+import { getChildCallName } from "../../services/parentMockData";
 
 export interface ParentChildSwitcherProps {
   children?: LinkedStudent[]; // or linkedStudents
@@ -11,21 +16,30 @@ export interface ParentChildSwitcherProps {
   className?: string;
 }
 
+/** Tối đa số con hiển thị dạng chip; nhiều hơn → nút "Chọn con" mở sheet (02 §8). */
+const MAX_CHIPS = 4;
+
+/** Avatar có vòng sáng khi đang chọn (không phụ thuộc prop mới của Avatar). */
+const ChildAvatar: React.FC<{ child: LinkedStudent; selected: boolean; size?: "md" | "lg" }> = ({
+  child,
+  selected,
+  size = "md",
+}) => (
+  <span
+    className={cn(
+      "inline-flex shrink-0 rounded-full",
+      selected && "ring-2 ring-gold ring-offset-2 ring-offset-night"
+    )}
+  >
+    <Avatar src={child.avatarUrl} name={child.name} alt="" size={size} />
+  </span>
+);
+
 /**
- * ParentChildSwitcher (§27, §30, Wireframe C §8, Sitemap §6)
- *
- * Wireframe C:
- * Con đang xem
- * ┌─────────────────────────────────┐
- * │ 👦 Nguyễn Văn An            ▼  │
- * │    Lớp 7A                      │
- * └─────────────────────────────────┘
- *
- * Ràng buộc:
- * - Đổi con → BẮT BUỘC refresh context dashboard/score/attendance/notification
- *   (gọi lại toàn bộ data fetch liên quan, không chỉ đổi label hiển thị).
- * - RULE-010: font-size ≥18px (body-lg), touch target ≥52–56px.
- * - RULE-012: KHÔNG dùng icon-only cho action nghiệp vụ quan trọng.
+ * ParentChildSwitcher (B-PH-01, 02 §8, 03 §9)
+ * - ≤ 4 con: chip ngang có ảnh, 1 chạm; chip đang chọn nền night.
+ * - > 4 con: nút "Chọn con" mở BottomSheet.
+ * Đổi con → context tải lại dashboard / điểm / điểm danh / thông báo.
  */
 export const ParentChildSwitcher: React.FC<ParentChildSwitcherProps> = ({
   children,
@@ -33,177 +47,138 @@ export const ParentChildSwitcher: React.FC<ParentChildSwitcherProps> = ({
   selectedChildId,
   onChange,
   isLoading = false,
-  className = "",
+  className,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const studentList = children || students || [];
-  const currentChild =
-    studentList.find((s) => s.id === selectedChildId) || studentList[0];
+  const currentChild = studentList.find((s) => s.id === selectedChildId) || studentList[0];
 
-  const handleSelectChild = async (childId: string) => {
-    setIsOpen(false);
-    if (childId !== selectedChildId) {
-      await onChange(childId);
+  if (!currentChild) return null;
+
+  const select = (childId: string) => {
+    setSheetOpen(false);
+    if (childId !== currentChild.id) {
+      haptic();
+      void onChange(childId);
     }
   };
 
-  if (!currentChild) {
-    return null;
-  }
-
-  return (
-    <div className={`space-y-1.5 ${className}`}>
-      {/* Label above selector as per Wireframe C */}
-      <div className="flex items-center justify-between px-1">
-        <label
-          htmlFor="parent-child-button"
-          className="text-[15px] sm:text-[16px] font-semibold text-[#78716C]"
-        >
-          Con đang xem
-        </label>
-        {isLoading && (
-          <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#B4232C] animate-pulse">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            <span>Đang tải dữ liệu của con...</span>
-          </span>
-        )}
-      </div>
-
-      {/* Main Switcher Trigger Button - touch target >= 56px, font >= 18px (RULE-010) */}
-      <div className="relative">
+  // ------------------------------------------------------------------ > 4 con
+  if (studentList.length > MAX_CHIPS) {
+    return (
+      <div className={className} aria-busy={isLoading || undefined}>
         <button
-          id="parent-child-button"
           type="button"
-          disabled={isLoading}
-          onClick={() => setIsOpen(!isOpen)}
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          aria-label={`Chọn học sinh. Con đang xem: ${currentChild.name}, ${currentChild.className}`}
-          className={`w-full min-h-[56px] sm:min-h-[60px] p-3.5 sm:p-4 rounded-[14px] bg-white border text-left transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs ${
-            isOpen
-              ? "border-[#B4232C] ring-3 ring-[#B4232C]/15"
-              : "border-[#E7E5E4] hover:border-[#D6D3D1] hover:bg-[#FAFAF9]"
-          } ${isLoading ? "opacity-75 cursor-wait" : ""}`}
+          onClick={() => setSheetOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+          className={cn(
+            "flex min-h-16 w-full items-center gap-3 rounded-card border border-line bg-surface p-2 pr-4 text-left shadow-xs",
+            "transition-[border-color,box-shadow] duration-200 ease-out-soft hover:border-line-strong hover:shadow-card",
+            "focus-visible:outline-3 focus-visible:outline-offset-2 sm:w-auto sm:min-w-80"
+          )}
         >
-          {/* Left: Avatar & Identity */}
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FFF1F2] to-[#FFE4E6] border border-[#FECDD3] flex items-center justify-center text-[22px] flex-shrink-0 shadow-xs">
-              👦
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                {currentChild.christianName && (
-                  <span className="text-[14px] font-semibold text-[#B4232C] bg-[#FFF1F2] px-2 py-0.5 rounded-md">
-                    {currentChild.christianName}
-                  </span>
-                )}
-                <span className="text-[13px] font-mono text-[#A8A29E]">
-                  {currentChild.code}
-                </span>
-              </div>
-              <h3 className="text-[18px] sm:text-[20px] font-bold text-[#1C1917] font-serif truncate mt-0.5">
-                {currentChild.name}
-              </h3>
-              <p className="text-[14px] sm:text-[15px] font-medium text-[#57534E]">
-                {currentChild.className} {currentChild.grade ? `· ${currentChild.grade}` : ""}
-              </p>
-            </div>
-          </div>
-
-          {/* Right: Dropdown arrow with clear label & touch area */}
-          <div className="flex items-center gap-2 flex-shrink-0 text-[#78716C] pl-2">
-            <span className="text-[14px] font-medium hidden sm:inline text-[#78716C]">
-              Đổi con
+          <ChildAvatar child={currentChild} selected={false} />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm text-ink-3">Đang xem</span>
+            <span className="block truncate text-lg font-semibold text-ink">
+              {getChildCallName(currentChild)}
+              <span className="font-normal text-ink-2"> · {currentChild.className}</span>
             </span>
-            <div
-              className={`w-8 h-8 rounded-full bg-[#FAFAF9] flex items-center justify-center transition-transform duration-200 ${
-                isOpen ? "rotate-180 bg-[#FFF1F2] text-[#B4232C]" : ""
-              }`}
-            >
-              <ChevronDown className="w-5 h-5" />
-            </div>
-          </div>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1.5 text-base font-semibold text-primary-ink">
+            <Users className="size-5" aria-hidden="true" />
+            Chọn con
+            <ChevronDown className="size-5" aria-hidden="true" />
+          </span>
         </button>
 
-        {/* Backdrop for mobile closing */}
-        {isOpen && (
-          <div
-            className="fixed inset-0 z-20 bg-black/20 sm:bg-transparent"
-            onClick={() => setIsOpen(false)}
-          />
-        )}
-
-        {/* Dropdown Options Menu */}
-        {isOpen && (
-          <div
-            role="listbox"
-            aria-label="Danh sách các con liên kết"
-            className="absolute left-0 right-0 top-full mt-2 z-30 bg-white rounded-[16px] border border-[#E7E5E4] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 p-2 space-y-1.5"
-          >
-            <div className="px-3 py-2 text-[13px] font-semibold uppercase tracking-wider text-[#A8A29E] border-b border-[#F5F5F4]">
-              Chọn con để xem điểm và chuyên cần ({studentList.length} con)
-            </div>
-
-            {studentList.map((student) => {
-              const isSelected = student.id === currentChild.id;
+        <BottomSheet
+          isOpen={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="Chọn con"
+          description={`${studentList.length} con đã liên kết với tài khoản`}
+        >
+          <ul aria-label="Danh sách con" className="space-y-2 pb-2">
+            {studentList.map((child) => {
+              const selected = child.id === currentChild.id;
               return (
-                <div
-                  key={student.id}
-                  role="option"
-                  aria-selected={isSelected}
-                  tabIndex={0}
-                  onClick={() => handleSelectChild(student.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleSelectChild(student.id);
-                    }
-                  }}
-                  className={`w-full min-h-[56px] p-3 rounded-[12px] flex items-center justify-between gap-3 transition-all cursor-pointer border ${
-                    isSelected
-                      ? "bg-[#FFF1F2] border-[#FECDD3] text-[#1C1917]"
-                      : "bg-white border-transparent hover:bg-[#FAFAF9] hover:border-[#E7E5E4]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-[#FAFAF9] border border-[#E7E5E4] flex items-center justify-center text-[20px] flex-shrink-0">
-                      👦
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        {student.christianName && (
-                          <span className="text-[12px] font-semibold text-[#B4232C]">
-                            {student.christianName}
-                          </span>
-                        )}
-                        <span className="text-[16px] sm:text-[18px] font-bold text-[#1C1917] font-serif truncate">
-                          {student.name}
-                        </span>
-                      </div>
-                      <p className="text-[13px] text-[#57534E]">
-                        {student.className} · Mã: {student.code}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {isSelected ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[13px] font-bold bg-[#B4232C] text-white">
-                        <Check className="w-4 h-4" />
-                        <span>Đang xem</span>
+                <li key={child.id}>
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => select(child.id)}
+                    className={cn(
+                      "flex min-h-16 w-full items-center gap-3 rounded-control border p-3 text-left",
+                      "transition-colors duration-200 focus-visible:outline-3 focus-visible:outline-offset-2",
+                      selected
+                        ? "border-night bg-night text-on-night"
+                        : "border-line bg-surface text-ink hover:bg-surface-2"
+                    )}
+                  >
+                    <ChildAvatar child={child} selected={selected} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-lg font-semibold">
+                        {child.christianName ? `${child.christianName} ` : ""}
+                        {child.name}
                       </span>
-                    ) : (
-                      <span className="text-[13px] font-semibold text-[#78716C] hover:text-[#1C1917]">
-                        Chọn
+                      <span className={cn("block text-sm", selected ? "text-on-night/75" : "text-ink-2")}>
+                        {child.className}
+                        {child.grade ? ` · ${child.grade}` : ""}
+                      </span>
+                    </span>
+                    {selected && (
+                      <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold">
+                        <Check className="size-5" aria-hidden="true" />
+                        Đang xem
                       </span>
                     )}
-                  </div>
-                </div>
+                  </button>
+                </li>
               );
             })}
-          </div>
-        )}
+          </ul>
+        </BottomSheet>
       </div>
+    );
+  }
+
+  // ------------------------------------------------------------------ ≤ 4 con
+  return (
+    <div
+      role="group"
+      aria-label="Chọn con"
+      aria-busy={isLoading || undefined}
+      className={cn("-mx-1 flex snap-x gap-2 overflow-x-auto px-1 py-1.5 no-scrollbar", className)}
+    >
+      {studentList.map((child) => {
+        const selected = child.id === currentChild.id;
+        return (
+          <button
+            key={child.id}
+            type="button"
+            aria-pressed={selected}
+            aria-label={`${child.name}, ${child.className}`}
+            onClick={() => select(child.id)}
+            className={cn(
+              "flex min-h-14 shrink-0 snap-start items-center gap-2.5 rounded-full border py-1.5 pr-5 pl-1.5 text-left select-none",
+              "transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out-soft active:scale-[0.97]",
+              "focus-visible:outline-3 focus-visible:outline-offset-2",
+              selected
+                ? "border-night bg-night text-on-night shadow-card"
+                : "border-line bg-surface text-ink hover:border-line-strong hover:shadow-xs"
+            )}
+          >
+            <ChildAvatar child={child} selected={selected} />
+            <span className="flex flex-col leading-tight">
+              <span className="text-base font-semibold whitespace-nowrap">{getChildCallName(child)}</span>
+              <span className={cn("text-sm whitespace-nowrap", selected ? "text-on-night/75" : "text-ink-3")}>
+                {child.className}
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 };

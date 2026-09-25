@@ -1,7 +1,11 @@
 import React from "react";
 import { Student, AttendanceStatus } from "../../types";
+import { cn } from "../../lib/cn";
+import { haptic } from "../../lib/motion";
 import { Avatar } from "../ui/Avatar";
+import { SegmentedControl, SegmentedOption } from "../ui/SegmentedControl";
 import { AttendanceQuickToggle } from "./AttendanceQuickToggle";
+import { ATTENDANCE_CYCLE, ATTENDANCE_STATUS_META } from "./attendanceStatus";
 
 export interface AttendanceRowProps {
   student: Student;
@@ -15,19 +19,23 @@ export interface AttendanceRowProps {
   className?: string;
 }
 
+const SEGMENT_OPTIONS: SegmentedOption<AttendanceStatus>[] = ATTENDANCE_CYCLE.map((status) => {
+  const meta = ATTENDANCE_STATUS_META[status];
+  const Icon = meta.Icon;
+  return { value: status, label: meta.label, tone: meta.tone, icon: <Icon /> };
+});
+
+/** Họ tên đầy đủ kèm tên Thánh: "Giuse Nguyễn Văn An" */
+export function studentFullName(student: Student): string {
+  return student.christianName ? `${student.christianName} ${student.name}` : student.name;
+}
+
 /**
- * AttendanceRow Component (§21 - 03_Component_Library)
- *
- * Phân cấp cấu trúc:
- * ├── StudentAvatar (với fallback tên tắt)
- * ├── StudentName (kèm Tên Thánh, STT, Mã số)
- * ├── AttendanceStatus (hiển thị trực quan)
- * └── QuickAction (AttendanceQuickToggle 1 chạm hoặc chọn menu)
- *
- * Tối ưu UX/UI cho Giáo lý viên & người lớn tuổi:
- * - Touch target ≥ 48px
- * - Font chữ rõ ràng, độ tương phản cao
- * - Highlight viền/nền khi có thay đổi (dirty) hoặc lỗi (error)
+ * AttendanceRow (03 §7)
+ * - Trái: Avatar · Tên Thánh + họ tên · mã học sinh
+ * - Phải (< md): AttendanceStatusChip xoay vòng + nút "..." chọn trực tiếp
+ * - Phải (≥ md): SegmentedControl 4 trạng thái, chọn trực tiếp 1 chạm
+ * Hàng tự xuống dòng khi chữ lớn / màn hẹp để không tràn ngang.
  */
 export const AttendanceRow: React.FC<AttendanceRowProps> = ({
   student,
@@ -37,94 +45,68 @@ export const AttendanceRow: React.FC<AttendanceRowProps> = ({
   isDirty = false,
   isSaved = false,
   hasError = false,
-  className = "",
+  className,
 }) => {
-  const handleStatusChange = (newStatus: AttendanceStatus) => {
-    onStatusChange(student.id, newStatus);
+  const fullName = studentFullName(student);
+  const rowLabel = `Điểm danh em ${fullName}`;
+
+  const handleChange = (next: AttendanceStatus) => {
+    onStatusChange(student.id, next);
+  };
+
+  const handleSegmentChange = (next: AttendanceStatus) => {
+    haptic();
+    handleChange(next);
   };
 
   return (
     <div
+      role="listitem"
       data-testid={`attendance-row-${student.id}`}
-      className={`
-        group relative flex items-center justify-between gap-3 sm:gap-4
-        p-3.5 sm:p-4 rounded-[14px] border transition-all duration-200
-        min-h-[64px] sm:min-h-[72px]
-        ${
-          disabled
-            ? "bg-[#FAFAF9] border-[#E7E5E4] opacity-75"
-            : hasError
-            ? "bg-[#FEF2F2] border-[#FECDD3] ring-1 ring-[#F87171]"
-            : isDirty
-            ? "bg-[#FFFBEB] border-[#FDE68A] shadow-xs"
-            : "bg-white border-[#E7E5E4] hover:border-[#D6D3D1] hover:shadow-xs"
-        }
-        ${className}
-      `}
+      data-dirty={isDirty || undefined}
+      className={cn(
+        "relative flex min-h-15 flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:px-4",
+        "transition-colors duration-200 first:rounded-t-card last:rounded-b-card",
+        hasError ? "bg-danger-soft/60" : "hover:bg-surface-2/60",
+        disabled && "opacity-70",
+        className
+      )}
     >
-      {/* Cột trái: STT + Avatar + Thông tin học sinh */}
-      <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
-        {/* Số thứ tự (STT) lớn, rõ ràng */}
-        <div className="shrink-0 w-7 sm:w-8 text-center">
-          <span className="font-mono text-[13px] sm:text-[14px] font-bold text-[#78716C]">
-            {student.orderNumber < 10
-              ? `0${student.orderNumber}`
-              : student.orderNumber}
-          </span>
-        </div>
+      {/* Dấu hiệu "chưa lưu": vạch vàng mép trái + chữ cho screen reader */}
+      {isDirty && (
+        <span aria-hidden="true" className="absolute inset-y-2.5 left-0 w-1 rounded-full bg-gold" />
+      )}
 
-        {/* Avatar học sinh */}
-        <div className="shrink-0">
-          <Avatar
-            src={student.avatarUrl}
-            name={student.name}
-            size="md"
-            roleBadge="HS"
-            className="ring-2 ring-white shadow-xs"
-          />
-        </div>
-
-        {/* Họ tên, Tên Thánh, Mã số */}
-        <div className="min-w-0 flex-1 space-y-0.5">
-          {/* Tên Thánh (Christian name) nếu có */}
-          {student.christianName && (
-            <div className="text-[12px] sm:text-[13px] font-bold text-[#B4232C] uppercase tracking-wide">
-              {student.christianName}
-            </div>
-          )}
-
-          {/* Họ và tên chính */}
-          <div className="font-bold text-[15px] sm:text-[16px] text-[#1C1917] truncate leading-snug">
+      <div className="flex min-w-0 grow basis-36 items-center gap-3">
+        <Avatar src={student.avatarUrl} name={student.name} size="md" />
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-base leading-snug font-semibold break-words text-ink">
+            {student.christianName && <span className="font-medium text-ink-2">{student.christianName} </span>}
             {student.name}
-          </div>
-
-          {/* Mã học sinh & ghi chú phụ */}
-          <div className="flex items-center gap-2 text-[12px] text-[#78716C] flex-wrap">
-            <span className="font-mono font-medium">{student.code}</span>
-            {student.gender && (
-              <span className="text-[#A8A29E]">• {student.gender === "MALE" ? "Nam" : "Nữ"}</span>
-            )}
-            {isDirty && (
-              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#FEF3C7] text-[#8B6419]">
-                Chưa lưu
-              </span>
-            )}
-            {isSaved && !isDirty && (
-              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#D1FAE5] text-[#146C47]">
-                Đã lưu
-              </span>
-            )}
-          </div>
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-ink-3">
+            <span className="font-mono">{student.code}</span>
+            {isDirty && <span className="sr-only">Chưa lưu</span>}
+            {isSaved && !isDirty && <span className="sr-only">Đã lưu</span>}
+            {hasError && <span className="font-medium text-danger">Chưa gửi được</span>}
+          </p>
         </div>
       </div>
 
-      {/* Cột phải: AttendanceQuickToggle (One-touch cycle + Full Menu) */}
-      <div className="shrink-0 ml-2">
-        <AttendanceQuickToggle
-          status={status}
-          onChange={handleStatusChange}
+      {/* Mobile: chip xoay vòng + menu chọn trực tiếp */}
+      <div className="ml-auto flex shrink-0 items-center md:hidden">
+        <AttendanceQuickToggle status={status} onChange={handleChange} disabled={disabled} ariaLabel={rowLabel} />
+      </div>
+
+      {/* Tablet / desktop: phân đoạn 4 trạng thái */}
+      <div className="ml-auto hidden shrink-0 md:block">
+        <SegmentedControl<AttendanceStatus>
+          value={status}
+          options={SEGMENT_OPTIONS}
+          onChange={handleSegmentChange}
+          ariaLabel={rowLabel}
           disabled={disabled}
-          ariaLabel={`Điểm danh cho em ${student.name}`}
+          size="md"
         />
       </div>
     </div>

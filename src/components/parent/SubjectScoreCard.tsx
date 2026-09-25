@@ -1,6 +1,12 @@
-import React, { useState } from "react";
-import { ChevronDown, ChevronUp, Info } from "lucide-react";
+import React, { useId, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { SubjectScoreSummary } from "../../types";
+import { cn } from "../../lib/cn";
+import { scoreGrade } from "../../lib/format";
+import { IconTile } from "../ui/IconTile";
+import { ProgressBar } from "../ui/ProgressBar";
+import { TONE_TEXT, toneFromString } from "../ui/tone";
+import { formatScore, subjectIcon } from "./parentInsights";
 
 export interface SubjectScoreCardProps {
   subject: SubjectScoreSummary;
@@ -9,168 +15,120 @@ export interface SubjectScoreCardProps {
   className?: string;
 }
 
+const hasValue = (value: number | null | undefined): value is number =>
+  value !== null && value !== undefined && !Number.isNaN(value);
+
 /**
- * SubjectScoreCard (§27, Wireframe C §8, Wireframe §9)
- *
- * Wireframe C layout:
- * ┌──────────────────────────────┐
- * │ 📖 Giáo lý                   │
- * │ Điểm TB                8.5   │
- * │ GK 8.0   CK 9.0              │
- * └──────────────────────────────┘
- *
- * Ràng buộc:
- * - Hiển thị đúng format: tên môn + icon, Điểm TB, GK/CK.
- * - Cho phép chạm mở rộng để xem chi tiết điểm thành phần (Miệng, 15', GK, CK)
- *   theo Wireframe §9.
- * - RULE-010: font-size ≥18px, touch target ≥52–56px.
+ * SubjectScoreCard (03 §9, 04 §11) — IconTile môn · tên · điểm TB lớn ·
+ * Giữa kỳ / Cuối kỳ · thanh tiến độ nhỏ. Chạm "Xem chi tiết" để xem điểm miệng,
+ * 15 phút và nhận xét môn (nếu có).
  */
 export const SubjectScoreCard: React.FC<SubjectScoreCardProps> = ({
   subject,
   onSelect,
   defaultExpanded = false,
-  className = "",
+  className,
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const {
-    subjectName,
-    icon,
-    averageScore,
-    midtermScore,
-    finalScore,
-    oralScore,
-    quizScore,
-    comment,
-  } = subject;
+  const detailId = useId();
+  const { subjectName, averageScore, midtermScore, finalScore, oralScore, quizScore, comment } = subject;
 
-  const handleToggle = () => {
-    setIsExpanded(!isExpanded);
-    if (onSelect) {
-      onSelect(subject);
-    }
+  const grade = scoreGrade(averageScore);
+  const Icon = subjectIcon(subjectName);
+  const hasDetails = hasValue(oralScore) || hasValue(quizScore) || Boolean(comment);
+
+  const toggle = () => {
+    setIsExpanded((open) => !open);
+    onSelect?.(subject);
   };
 
   return (
-    <div
-      className={`rounded-[16px] bg-white border transition-all shadow-xs ${
-        isExpanded
-          ? "border-[#B4232C]/40 ring-2 ring-[#B4232C]/10"
-          : "border-[#E7E5E4] hover:border-[#D6D3D1]"
-      } ${className}`}
-    >
-      {/* Main Touch Area - min touch target >= 56px, font >= 18px (RULE-010) */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        aria-expanded={isExpanded}
-        aria-label={`Môn ${subjectName}, Điểm trung bình: ${averageScore.toFixed(1)}, Giữa kỳ: ${midtermScore ?? "Chưa có"}, Cuối kỳ: ${finalScore ?? "Chưa có"}`}
-        className="w-full min-h-[56px] p-4 sm:p-5 text-left flex flex-col justify-between gap-3 cursor-pointer select-none"
-      >
-        {/* Row 1: Icon + Tên môn (font-size >= 18px) */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-[22px] sm:text-[24px] flex-shrink-0" role="img" aria-hidden="true">
-              {icon || "📖"}
-            </span>
-            <h4 className="text-[18px] sm:text-[20px] font-bold text-[#1C1917] font-serif truncate">
-              {subjectName}
-            </h4>
-          </div>
+    <article className={cn("rounded-card border border-line bg-surface p-4 shadow-card sm:p-5", className)}>
+      <div className="flex items-start gap-3">
+        <IconTile icon={<Icon />} tone={toneFromString(subjectName)} size="md" className="mt-0.5" />
 
-          {/* Expand indicator with text (RULE-012) */}
-          <div className="flex items-center gap-1 text-[13px] font-semibold text-[#78716C]">
-            <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
-            {isExpanded ? (
-              <ChevronUp className="w-4 h-4 text-[#B4232C]" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-[#78716C]" />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg leading-snug font-semibold text-ink">{subjectName}</h3>
+          <p className={cn("text-sm font-semibold", TONE_TEXT[grade.tone])}>{grade.label}</p>
+        </div>
+
+        <p className="shrink-0 text-right" aria-label={`Điểm trung bình ${formatScore(averageScore)}`}>
+          <span className="block text-3xl leading-none font-bold tracking-tight text-ink tabular-nums">
+            {formatScore(averageScore)}
+          </span>
+          <span className="mt-1 block text-sm text-ink-3">Điểm TB</span>
+        </p>
+      </div>
+
+      <ProgressBar
+        value={averageScore}
+        max={10}
+        tone={grade.tone}
+        size="sm"
+        label={`${subjectName}: ${formatScore(averageScore)} trên 10`}
+        className="mt-4"
+      />
+
+      <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-base">
+        <div className="flex items-baseline gap-1.5">
+          <dt className="text-ink-2">Giữa kỳ</dt>
+          <dd className="font-semibold text-ink tabular-nums">{hasValue(midtermScore) ? formatScore(midtermScore) : "Chưa có"}</dd>
+        </div>
+        <div className="flex items-baseline gap-1.5">
+          <dt className="text-ink-2">Cuối kỳ</dt>
+          <dd className="font-semibold text-ink tabular-nums">{hasValue(finalScore) ? formatScore(finalScore) : "Chưa có"}</dd>
+        </div>
+      </dl>
+
+      {hasDetails && (
+        <>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={isExpanded}
+            aria-controls={detailId}
+            className={cn(
+              "-mx-2 mt-2 flex min-h-13 w-[calc(100%_+_1rem)] items-center justify-between gap-2 rounded-control px-2 text-base font-semibold text-primary-ink",
+              "transition-colors duration-200 hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-offset-1"
             )}
-          </div>
-        </div>
+          >
+            <span>{isExpanded ? "Thu gọn" : "Xem chi tiết"}</span>
+            <ChevronDown
+              className={cn("size-5 transition-transform duration-200", isExpanded && "rotate-180")}
+              aria-hidden="true"
+            />
+          </button>
 
-        {/* Row 2: Điểm TB (font >= 18px) */}
-        <div className="flex items-baseline justify-between pt-1 border-t border-[#F5F5F4]">
-          <span className="text-[16px] sm:text-[18px] font-medium text-[#57534E]">
-            Điểm TB
-          </span>
-          <span className="text-[22px] sm:text-[24px] font-bold font-serif text-[#B4232C]">
-            {averageScore.toFixed(1)}
-          </span>
-        </div>
-
-        {/* Row 3: GK / CK đúng format chuẩn */}
-        <div className="flex items-center justify-between text-[15px] sm:text-[16px] text-[#78716C] bg-[#FAFAF9] px-3.5 py-2 rounded-[10px] border border-[#F5F5F4]">
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-[#57534E]">Giữa kỳ:</span>
-            <span className="font-bold text-[#1C1917]">
-              {midtermScore !== null && midtermScore !== undefined
-                ? midtermScore.toFixed(1)
-                : "—"}
-            </span>
-          </div>
-
-          <div className="w-px h-4 bg-[#E7E5E4]" />
-
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-[#57534E]">Cuối kỳ:</span>
-            <span className="font-bold text-[#1C1917]">
-              {finalScore !== null && finalScore !== undefined
-                ? finalScore.toFixed(1)
-                : "—"}
-            </span>
-          </div>
-        </div>
-      </button>
-
-      {/* Expandable Section: Detail component scores (Wireframe §9) */}
-      {isExpanded && (
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-2 border-t border-[#F5F5F4] bg-[#FAFAF9]/60 rounded-b-[16px] space-y-3 animate-in fade-in duration-150">
-          <div className="text-[13px] font-bold uppercase tracking-wider text-[#78716C]">
-            Thành phần điểm chi tiết
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[14px]">
-            <div className="p-2.5 rounded-[10px] bg-white border border-[#E7E5E4] text-center">
-              <div className="text-[#78716C] text-[12px]">Điểm Miệng</div>
-              <div className="text-[17px] font-bold text-[#1C1917] mt-0.5">
-                {oralScore !== null && oralScore !== undefined ? oralScore.toFixed(1) : "—"}
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-[10px] bg-white border border-[#E7E5E4] text-center">
-              <div className="text-[#78716C] text-[12px]">15 Phút</div>
-              <div className="text-[17px] font-bold text-[#1C1917] mt-0.5">
-                {quizScore !== null && quizScore !== undefined ? quizScore.toFixed(1) : "—"}
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-[10px] bg-white border border-[#E7E5E4] text-center">
-              <div className="text-[#78716C] text-[12px]">Giữa Kỳ (GK)</div>
-              <div className="text-[17px] font-bold text-[#1C1917] mt-0.5">
-                {midtermScore !== null && midtermScore !== undefined ? midtermScore.toFixed(1) : "—"}
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-[10px] bg-white border border-[#E7E5E4] text-center">
-              <div className="text-[#78716C] text-[12px]">Cuối Kỳ (CK)</div>
-              <div className="text-[17px] font-bold text-[#1C1917] mt-0.5">
-                {finalScore !== null && finalScore !== undefined ? finalScore.toFixed(1) : "—"}
-              </div>
-            </div>
-          </div>
-
-          {/* Teacher Subject Comment if present */}
-          {comment && (
-            <div className="p-3 rounded-[10px] bg-[#FFFBEB] border border-[#FDE68A] text-[14px] sm:text-[15px] text-[#92400E] flex items-start gap-2">
-              <Info className="w-4 h-4 text-[#D97706] flex-shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold">Nhận xét môn: </span>
-                <span>{comment}</span>
-              </div>
+          {isExpanded && (
+            <div id={detailId} className="mt-2 space-y-3 border-t border-line pt-3">
+              {(hasValue(oralScore) || hasValue(quizScore)) && (
+                <dl className="grid grid-cols-2 gap-2">
+                  {hasValue(oralScore) && (
+                    <div className="rounded-control bg-surface-2 p-3">
+                      <dt className="text-sm text-ink-2">Điểm miệng</dt>
+                      <dd className="text-xl font-bold text-ink tabular-nums">{formatScore(oralScore)}</dd>
+                    </div>
+                  )}
+                  {hasValue(quizScore) && (
+                    <div className="rounded-control bg-surface-2 p-3">
+                      <dt className="text-sm text-ink-2">Kiểm tra 15 phút</dt>
+                      <dd className="text-xl font-bold text-ink tabular-nums">{formatScore(quizScore)}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+              {comment && (
+                <figure className="rounded-control bg-gold-soft/60 p-3">
+                  <figcaption className="text-sm font-semibold text-gold-ink">Nhận xét môn học</figcaption>
+                  <blockquote className="mt-1 font-accent text-base leading-relaxed text-ink italic">
+                    &ldquo;{comment}&rdquo;
+                  </blockquote>
+                </figure>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </article>
   );
 };

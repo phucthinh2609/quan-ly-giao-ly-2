@@ -1,7 +1,8 @@
 import React from "react";
 import { Spinner } from "./Spinner";
+import { cn } from "../../lib/cn";
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "soft";
 export type ButtonSize = "sm" | "md" | "lg" | "parent";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -16,6 +17,32 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   className?: string;
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
+
+// md dùng --control → chiều cao tự thích ứng theo vai trò (01 §9.1)
+const sizeClasses: Record<ButtonSize, string> = {
+  sm: "h-(--control-sm) px-3.5 text-sm gap-1.5 [&_svg]:size-4",
+  md: "h-(--control) px-5 text-[0.9375rem] gap-2 [&_svg]:size-[1.125rem]",
+  lg: "h-(--control-lg) px-6 text-base gap-2.5 [&_svg]:size-5",
+  parent: "h-14 px-7 text-lg gap-3 [&_svg]:size-6",
+};
+
+const variantClasses: Record<ButtonVariant, string> = {
+  primary: "bg-primary text-on-primary hover:bg-primary-hover hover:shadow-glow",
+  secondary: "bg-night text-on-night hover:bg-night/90",
+  outline: "bg-surface text-ink border border-line-strong hover:border-ink-3 hover:bg-surface-2",
+  ghost: "bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink",
+  danger: "bg-danger text-on-solid hover:bg-danger/90",
+  soft: "bg-primary-soft text-primary-ink hover:bg-primary-soft/70",
+};
+
+const spinnerColor: Record<ButtonVariant, "white" | "current"> = {
+  primary: "white",
+  secondary: "current",
+  outline: "current",
+  ghost: "current",
+  danger: "current",
+  soft: "current",
+};
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
@@ -37,78 +64,32 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const isDisabled = disabled || loading;
 
-    // Size variants based on Phase 0 Tokens
-    // sm: height 36px, min-h-[36px]
-    // md: height 44px (touch target standard min 44px)
-    // lg: height 52px (GLV fast input touch target 52px)
-    // parent: height 56px (Parent elderly-friendly touch target 56px, font 18px)
-    const sizeClasses: Record<ButtonSize, string> = {
-      sm: "h-[36px] px-3 text-[14px] gap-1.5 font-medium rounded-[8px]",
-      md: "h-[44px] px-4 text-[15px] gap-2 font-semibold rounded-[10px]",
-      lg: "h-[52px] px-5 text-[16px] gap-2.5 font-semibold rounded-[10px]",
-      parent: "h-[56px] px-6 text-[18px] gap-3 font-bold rounded-[12px] tracking-wide",
-    };
-
-    // Variant color styles with state tokens (Default, Hover, Active, Disabled)
-    const variantClasses: Record<ButtonVariant, string> = {
-      primary:
-        "bg-[#B4232C] text-white hover:bg-[#941D25] active:bg-[#7A1A21] focus-visible:ring-[#B4232C]/30 shadow-xs active:shadow-none",
-      secondary:
-        "bg-[#F5F5F4] text-[#292524] hover:bg-[#E7E5E4] active:bg-[#D6D3D1] focus-visible:ring-[#292524]/20 border border-[#E7E5E4]",
-      outline:
-        "bg-transparent text-[#292524] border border-[#D6D3D1] hover:bg-[#FAFAF9] hover:border-[#A8A29E] active:bg-[#F5F5F4] focus-visible:ring-[#B4232C]/20",
-      ghost:
-        "bg-transparent text-[#44403C] hover:bg-[#F5F5F4] active:bg-[#E7E5E4] focus-visible:ring-[#44403C]/20",
-      danger:
-        "bg-[#C73A3A] text-white hover:bg-[#A52D2D] active:bg-[#852222] focus-visible:ring-[#DC4C4C]/30 shadow-xs active:shadow-none",
-    };
-
-    // Disabled state overrides
-    const disabledStyle = isDisabled
-      ? "opacity-60 cursor-not-allowed hover:bg-none pointer-events-none shadow-none"
-      : "cursor-pointer active:scale-[0.985]";
-
-    const spinnerColor =
-      variant === "primary" || variant === "danger"
-        ? "white"
-        : variant === "ghost" || variant === "outline"
-        ? "neutral"
-        : "neutral";
-
     return (
       <button
         ref={ref}
         type={type}
         disabled={isDisabled}
-        aria-busy={loading}
+        aria-busy={loading || undefined}
         onClick={onClick}
-        className={`
-          relative inline-flex items-center justify-center font-sans transition-colors duration-150 select-none
-          outline-none focus-visible:ring-3 focus-visible:ring-offset-2
-          ${fullWidth ? "w-full" : "w-auto"}
-          ${sizeClasses[size]}
-          ${variantClasses[variant]}
-          ${disabledStyle}
-          ${className}
-        `}
+        className={cn(
+          "relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold whitespace-nowrap select-none",
+          "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out-soft",
+          "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50",
+          fullWidth ? "w-full" : "w-auto",
+          sizeClasses[size],
+          variantClasses[variant],
+          isDisabled ? "cursor-not-allowed opacity-50 shadow-none" : "active:scale-[0.97]",
+          className
+        )}
         {...rest}
       >
-        {/* Loading Spinner: Absolute center to preserve exact button dimensions */}
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Spinner
-              size={size === "sm" ? "sm" : size === "parent" ? "lg" : "md"}
-              color={spinnerColor}
-            />
-          </div>
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Spinner size={size === "sm" ? "sm" : size === "parent" ? "lg" : "md"} color={spinnerColor[variant]} />
+          </span>
         )}
 
-        {/* Button Content: Hidden visibility when loading to maintain exact size */}
-        <span
-          className={`inline-flex items-center justify-center gap-[inherit] ${
-            loading ? "invisible" : "visible"
-          }`}
-        >
+        <span className={cn("inline-flex items-center justify-center gap-[inherit]", loading && "invisible")}>
           {leftIcon && (
             <span className="inline-flex shrink-0 items-center justify-center" aria-hidden="true">
               {leftIcon}

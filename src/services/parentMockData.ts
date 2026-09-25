@@ -2,6 +2,8 @@ import {
   LinkedStudent,
   AcademicPeriod,
   AcademicPeriodOption,
+  AttendanceStatus,
+  ParentAttendanceSummary,
   StudentAcademicReport,
   NotificationData,
   NOTIFICATION_TYPE_PRIORITY,
@@ -40,6 +42,45 @@ export const MOCK_LINKED_STUDENTS: LinkedStudent[] = [
   },
 ];
 
+/**
+ * Tên gọi ở nhà của từng con (tên ghép như "Mai Anh" không tách được bằng quy tắc).
+ * Không có trong bảng → dùng tên riêng cuối cùng của họ tên.
+ */
+export const MOCK_CHILD_CALL_NAMES: Record<string, string> = {
+  "s-01": "An",
+  "s-02": "Mai Anh",
+  "s-03": "Minh Khôi",
+};
+
+export function getChildCallName(child: Pick<LinkedStudent, "id" | "name"> | null | undefined): string {
+  if (!child) return "con";
+  const mapped = MOCK_CHILD_CALL_NAMES[child.id];
+  if (mapped) return mapped;
+  const parts = child.name.trim().split(/\s+/);
+  return parts[parts.length - 1] || "con";
+}
+
+// ============================================================================
+// GLV CONTACTS (lối tắt "Gọi GLV")
+// ============================================================================
+export interface ParentTeacherContact {
+  name: string;
+  /** Số hiển thị cho người đọc, VD "0903 456 721" */
+  phone: string;
+  /** Giá trị cho href="tel:..." */
+  tel: string;
+}
+
+export const MOCK_TEACHER_CONTACTS: Record<string, ParentTeacherContact> = {
+  "s-01": { name: "GLV. Giuse Trần Văn Minh", phone: "0903 456 721", tel: "+84903456721" },
+  "s-02": { name: "GLV. Maria Nguyễn Thị Lan", phone: "0918 234 567", tel: "+84918234567" },
+  "s-03": { name: "GLV. Têrêsa Phạm Thị Kim", phone: "0987 112 358", tel: "+84987112358" },
+};
+
+export function getTeacherContact(studentId: string): ParentTeacherContact | null {
+  return MOCK_TEACHER_CONTACTS[studentId] ?? null;
+}
+
 // ============================================================================
 // ACADEMIC PERIODS
 // ============================================================================
@@ -65,7 +106,7 @@ export const MOCK_ACADEMIC_PERIODS: AcademicPeriodOption[] = [
 // ACADEMIC REPORTS BY STUDENT & PERIOD
 // ============================================================================
 export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, StudentAcademicReport>> = {
-  // 👦 Child 1: Nguyễn Văn An (Lớp 7A)
+  // Child 1: Nguyễn Văn An (Lớp 7A)
   "s-01": {
     HK1: {
       studentId: "s-01",
@@ -73,13 +114,13 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
       periodLabel: "Học kỳ I",
       academicYear: "2026 - 2027",
       gpa: 8.5,
-      rankLabel: "Tốt",
+      rankLabel: "Giỏi",
       rankColor: "gold",
       subjects: [
         {
           subjectId: "sub-gl",
           subjectName: "Giáo lý",
-          icon: "📖",
+          icon: "",
           averageScore: 8.5,
           midtermScore: 8.0,
           finalScore: 9.0,
@@ -90,7 +131,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kt",
           subjectName: "Kinh Thánh",
-          icon: "✝️",
+          icon: "",
           averageScore: 9.0,
           midtermScore: 9.0,
           finalScore: 9.0,
@@ -101,7 +142,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-pv",
           subjectName: "Phụng vụ",
-          icon: "🕊️",
+          icon: "",
           averageScore: 8.0,
           midtermScore: 7.5,
           finalScore: 8.5,
@@ -112,7 +153,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-nb",
           subjectName: "Nhân bản & Hoạt động",
-          icon: "🤝",
+          icon: "",
           averageScore: 8.8,
           midtermScore: 8.5,
           finalScore: 9.0,
@@ -143,7 +184,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-gl",
           subjectName: "Giáo lý",
-          icon: "📖",
+          icon: "",
           averageScore: 8.9,
           midtermScore: 8.5,
           finalScore: 9.2,
@@ -153,7 +194,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kt",
           subjectName: "Kinh Thánh",
-          icon: "✝️",
+          icon: "",
           averageScore: 9.2,
           midtermScore: 9.0,
           finalScore: 9.5,
@@ -163,7 +204,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-pv",
           subjectName: "Phụng vụ",
-          icon: "🕊️",
+          icon: "",
           averageScore: 8.3,
           midtermScore: 8.0,
           finalScore: 8.6,
@@ -173,7 +214,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-nb",
           subjectName: "Nhân bản & Hoạt động",
-          icon: "🤝",
+          icon: "",
           averageScore: 9.0,
           midtermScore: 9.0,
           finalScore: 9.0,
@@ -203,7 +244,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-gl",
           subjectName: "Giáo lý",
-          icon: "📖",
+          icon: "",
           averageScore: 8.7,
           midtermScore: 8.3,
           finalScore: 9.1,
@@ -211,7 +252,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kt",
           subjectName: "Kinh Thánh",
-          icon: "✝️",
+          icon: "",
           averageScore: 9.1,
           midtermScore: 9.0,
           finalScore: 9.2,
@@ -219,7 +260,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-pv",
           subjectName: "Phụng vụ",
-          icon: "🕊️",
+          icon: "",
           averageScore: 8.2,
           midtermScore: 7.8,
           finalScore: 8.6,
@@ -227,7 +268,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-nb",
           subjectName: "Nhân bản & Hoạt động",
-          icon: "🤝",
+          icon: "",
           averageScore: 8.9,
           midtermScore: 8.8,
           finalScore: 9.0,
@@ -245,7 +286,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
     },
   },
 
-  // 👧 Child 2: Nguyễn Thị Mai Anh (Lớp 3B)
+  // Child 2: Nguyễn Thị Mai Anh (Lớp 3B)
   "s-02": {
     HK1: {
       studentId: "s-02",
@@ -259,7 +300,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-gl",
           subjectName: "Giáo lý",
-          icon: "📖",
+          icon: "",
           averageScore: 9.5,
           midtermScore: 9.5,
           finalScore: 9.5,
@@ -270,7 +311,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kt",
           subjectName: "Kinh Thánh",
-          icon: "✝️",
+          icon: "",
           averageScore: 9.2,
           midtermScore: 9.0,
           finalScore: 9.5,
@@ -281,7 +322,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-cn",
           subjectName: "Cầu nguyện & Kinh hạt",
-          icon: "📿",
+          icon: "",
           averageScore: 9.4,
           midtermScore: 9.0,
           finalScore: 9.8,
@@ -292,7 +333,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kl",
           subjectName: "Kỷ luật & Tác phong",
-          icon: "⭐",
+          icon: "",
           averageScore: 9.0,
           midtermScore: 9.0,
           finalScore: 9.0,
@@ -323,7 +364,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-gl",
           subjectName: "Giáo lý",
-          icon: "📖",
+          icon: "",
           averageScore: 9.6,
           midtermScore: 9.5,
           finalScore: 9.7,
@@ -331,7 +372,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kt",
           subjectName: "Kinh Thánh",
-          icon: "✝️",
+          icon: "",
           averageScore: 9.4,
           midtermScore: 9.2,
           finalScore: 9.6,
@@ -339,7 +380,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-cn",
           subjectName: "Cầu nguyện & Kinh hạt",
-          icon: "📿",
+          icon: "",
           averageScore: 9.6,
           midtermScore: 9.5,
           finalScore: 9.8,
@@ -347,7 +388,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kl",
           subjectName: "Kỷ luật & Tác phong",
-          icon: "⭐",
+          icon: "",
           averageScore: 9.3,
           midtermScore: 9.0,
           finalScore: 9.5,
@@ -375,7 +416,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-gl",
           subjectName: "Giáo lý",
-          icon: "📖",
+          icon: "",
           averageScore: 9.5,
           midtermScore: 9.5,
           finalScore: 9.6,
@@ -383,7 +424,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kt",
           subjectName: "Kinh Thánh",
-          icon: "✝️",
+          icon: "",
           averageScore: 9.3,
           midtermScore: 9.1,
           finalScore: 9.5,
@@ -391,7 +432,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-cn",
           subjectName: "Cầu nguyện & Kinh hạt",
-          icon: "📿",
+          icon: "",
           averageScore: 9.5,
           midtermScore: 9.2,
           finalScore: 9.8,
@@ -399,7 +440,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-kl",
           subjectName: "Kỷ luật & Tác phong",
-          icon: "⭐",
+          icon: "",
           averageScore: 9.2,
           midtermScore: 9.0,
           finalScore: 9.3,
@@ -417,7 +458,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
     },
   },
 
-  // 👦 Child 3: Nguyễn Minh Khôi (Lớp Chiên Con 2)
+  // Child 3: Nguyễn Minh Khôi (Lớp Chiên Con 2)
   "s-03": {
     HK1: {
       studentId: "s-03",
@@ -425,13 +466,13 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
       periodLabel: "Học kỳ I",
       academicYear: "2026 - 2027",
       gpa: 8.0,
-      rankLabel: "Khá",
+      rankLabel: "Giỏi",
       rankColor: "neutral",
       subjects: [
         {
           subjectId: "sub-kc",
           subjectName: "Kể chuyện Thánh Kinh",
-          icon: "📖",
+          icon: "",
           averageScore: 8.0,
           midtermScore: 8.0,
           finalScore: 8.0,
@@ -440,7 +481,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-ld",
           subjectName: "Làm dấu & Kinh vắn",
-          icon: "✝️",
+          icon: "",
           averageScore: 8.0,
           midtermScore: 8.0,
           finalScore: 8.0,
@@ -449,7 +490,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-cm",
           subjectName: "Ca múa cử điệu",
-          icon: "🎶",
+          icon: "",
           averageScore: 8.5,
           midtermScore: 8.0,
           finalScore: 9.0,
@@ -472,13 +513,13 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
       periodLabel: "Học kỳ II",
       academicYear: "2026 - 2027",
       gpa: 8.3,
-      rankLabel: "Khá",
+      rankLabel: "Giỏi",
       rankColor: "neutral",
       subjects: [
         {
           subjectId: "sub-kc",
           subjectName: "Kể chuyện Thánh Kinh",
-          icon: "📖",
+          icon: "",
           averageScore: 8.2,
           midtermScore: 8.0,
           finalScore: 8.4,
@@ -486,7 +527,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-ld",
           subjectName: "Làm dấu & Kinh vắn",
-          icon: "✝️",
+          icon: "",
           averageScore: 8.3,
           midtermScore: 8.0,
           finalScore: 8.5,
@@ -494,7 +535,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-cm",
           subjectName: "Ca múa cử điệu",
-          icon: "🎶",
+          icon: "",
           averageScore: 8.6,
           midtermScore: 8.5,
           finalScore: 9.0,
@@ -516,13 +557,13 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
       periodLabel: "Cả năm học",
       academicYear: "2026 - 2027",
       gpa: 8.2,
-      rankLabel: "Khá",
+      rankLabel: "Giỏi",
       rankColor: "neutral",
       subjects: [
         {
           subjectId: "sub-kc",
           subjectName: "Kể chuyện Thánh Kinh",
-          icon: "📖",
+          icon: "",
           averageScore: 8.1,
           midtermScore: 8.0,
           finalScore: 8.2,
@@ -530,7 +571,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-ld",
           subjectName: "Làm dấu & Kinh vắn",
-          icon: "✝️",
+          icon: "",
           averageScore: 8.2,
           midtermScore: 8.0,
           finalScore: 8.3,
@@ -538,7 +579,7 @@ export const MOCK_STUDENT_REPORTS: Record<string, Record<AcademicPeriod, Student
         {
           subjectId: "sub-cm",
           subjectName: "Ca múa cử điệu",
-          icon: "🎶",
+          icon: "",
           averageScore: 8.5,
           midtermScore: 8.2,
           finalScore: 9.0,
@@ -567,8 +608,8 @@ export const MOCK_NOTIFICATIONS: Record<string, NotificationData[]> = {
       id: "notif-01-urg",
       type: "URGENT",
       title: "Thông báo chuẩn bị Tĩnh tâm & Xưng tội",
-      preview: "Chúa Nhật ngày 28/09 sẽ tổ chức buổi tĩnh tâm bắt buộc cho toàn khối Thêm Sức.",
-      content: "Kính gửi quý phụ huynh, để chuẩn bị tâm hồn sốt sắng cho ngày lễ Bổn mạng Xứ đoàn, Ban Giáo lý tổ chức buổi Tĩnh tâm và Xưng tội cho các em Lớp 7A vào lúc 14h30 Chúa Nhật ngày 28/09/2026 tại Nhà thờ Giáo xứ. Kính mong phụ huynh nhắc nhở các em tham dự đầy đủ đúng giờ.",
+      preview: "Chúa Nhật ngày 27/09 sẽ tổ chức buổi tĩnh tâm bắt buộc cho toàn khối Thêm Sức.",
+      content: "Kính gửi quý phụ huynh, để chuẩn bị tâm hồn sốt sắng cho ngày lễ Bổn mạng Xứ đoàn, Ban Giáo lý tổ chức buổi Tĩnh tâm và Xưng tội cho các em Lớp 7A vào lúc 14h30 Chúa Nhật ngày 27/09/2026 tại Nhà thờ Giáo xứ. Kính mong phụ huynh nhắc nhở các em tham dự đầy đủ đúng giờ.",
       timestamp: "2 giờ trước",
       formattedDate: "24/09/2026 · 08:30",
       isRead: false,
@@ -778,4 +819,86 @@ export async function fetchStudentNotifications(
 
   const rawList = MOCK_NOTIFICATIONS[studentId] || MOCK_NOTIFICATIONS["s-01"];
   return sortNotificationsByPriority(JSON.parse(JSON.stringify(rawList)));
+}
+
+// ============================================================================
+// ATTENDANCE HISTORY (từng buổi Chúa Nhật) — dựng xác định từ số liệu tổng hợp
+// ============================================================================
+
+export interface ParentAttendanceSession {
+  id: string;
+  /** Ngày học dạng "YYYY-MM-DD" (luôn là Chúa Nhật) */
+  date: string;
+  status: AttendanceStatus;
+  note?: string;
+}
+
+/** Buổi học gần nhất đã diễn ra (Chúa Nhật). */
+const LATEST_SESSION_DATE = { year: 2026, month: 8, day: 20 }; // 20/09/2026, month 0-based
+
+/** Số buổi đi muộn (vẫn tính là có đi học) theo học sinh. */
+const MOCK_LATE_SESSIONS: Record<string, number> = {
+  "s-03": 1,
+};
+
+const SESSION_NOTES: Partial<Record<AttendanceStatus, string>> = {
+  ABSENT: "Chưa có đơn xin phép",
+  EXCUSED: "Gia đình đã báo trước",
+  LATE: "Đến lớp sau giờ bắt đầu",
+};
+
+function seededRandom(seed: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    h = (h + 0x6d2b79f5) | 0;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Lịch sử điểm danh từng buổi, mới nhất trước. Số buổi mỗi trạng thái khớp với
+ * `attendance` (excusedSessions là một phần của absentSessions).
+ */
+export function buildAttendanceHistory(
+  studentId: string,
+  period: AcademicPeriod,
+  attendance: ParentAttendanceSummary
+): ParentAttendanceSession[] {
+  const total = Math.max(0, Math.round(attendance.totalSessions));
+  const excused = Math.min(Math.max(0, attendance.excusedSessions), total);
+  const unexcused = Math.min(Math.max(0, attendance.absentSessions - excused), total - excused);
+  const late = Math.min(MOCK_LATE_SESSIONS[studentId] ?? 0, Math.max(0, total - excused - unexcused));
+
+  const order = Array.from({ length: total }, (_, i) => i);
+  const random = seededRandom(`${studentId}:${period}`);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+
+  const statuses: AttendanceStatus[] = Array.from({ length: total }, () => "PRESENT");
+  order.forEach((sessionIndex, rank) => {
+    if (rank < unexcused) statuses[sessionIndex] = "ABSENT";
+    else if (rank < unexcused + excused) statuses[sessionIndex] = "EXCUSED";
+    else if (rank < unexcused + excused + late) statuses[sessionIndex] = "LATE";
+  });
+
+  return statuses.map((status, index) => {
+    const d = new Date(
+      Date.UTC(LATEST_SESSION_DATE.year, LATEST_SESSION_DATE.month, LATEST_SESSION_DATE.day - index * 7)
+    );
+    const date = d.toISOString().slice(0, 10);
+    return {
+      id: `${studentId}-${period}-${date}`,
+      date,
+      status,
+      note: SESSION_NOTES[status],
+    };
+  });
 }

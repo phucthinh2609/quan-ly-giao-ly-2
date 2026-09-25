@@ -1,8 +1,11 @@
 import React from "react";
-import { ShieldAlert, Home, Lock } from "lucide-react";
+import { Home, ShieldAlert } from "lucide-react";
 import { UserRole } from "../../types";
-import { Button } from "../ui";
+import { Button } from "../ui/Button";
+import { IconTile } from "../ui/IconTile";
 import { ROLE_DEFAULT_PATHS } from "../../context/AuthContext";
+import { cn } from "../../lib/cn";
+import { ROLE_LABELS } from "../../lib/format";
 
 export interface Forbidden403Props {
   role?: UserRole;
@@ -11,11 +14,14 @@ export interface Forbidden403Props {
   className?: string;
 }
 
+/**
+ * Forbidden403 — trang dành cho vai trò khác: giải thích ngắn + nút về trang chủ theo vai trò.
+ */
 export const Forbidden403: React.FC<Forbidden403Props> = ({
   role = "STUDENT",
   message = "Bạn không có quyền truy cập trang này.",
   onGoHome,
-  className = "",
+  className,
 }) => {
   const homePath = ROLE_DEFAULT_PATHS[role] || "/dashboard";
 
@@ -28,45 +34,25 @@ export const Forbidden403: React.FC<Forbidden403Props> = ({
   };
 
   return (
-    <div
-      className={`min-h-[420px] flex items-center justify-center p-6 bg-white rounded-[16px] border border-[#E7E5E4] shadow-xs ${className}`}
+    <section
+      aria-labelledby="forbidden-heading"
+      className={cn("flex min-h-[60vh] items-center justify-center px-4 py-12", className)}
     >
-      <div className="max-w-md w-full text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
-        {/* Shield Alert Icon */}
-        <div className="mx-auto w-16 h-16 rounded-full bg-[#FEF2F2] border border-[#FECDD3] flex items-center justify-center text-[#C73A3A] shadow-xs">
-          <ShieldAlert className="w-8 h-8" />
-        </div>
-
-        {/* Heading & Code */}
-        <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#F5F5F4] text-[#78716C] text-[12px] font-semibold">
-            <Lock className="w-3.5 h-3.5 text-[#A8A29E]" />
-            Mã lỗi 403 · Forbidden
-          </div>
-          <h2 className="text-[22px] sm:text-[24px] font-bold text-[#1C1917] font-serif">
-            Truy cập bị từ chối
-          </h2>
-          <p className="text-[15px] text-[#57534E] leading-relaxed">
-            {message}
-          </p>
-          <p className="text-[12px] text-[#A8A29E]">
-            Vai trò hiện tại của bạn ({role}) không có quyền thực hiện thao tác hoặc xem tài nguyên này.
-          </p>
-        </div>
-
-        {/* Primary Action Button */}
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Button
-            variant="primary"
-            size="lg"
-            leftIcon={<Home className="w-4 h-4" />}
-            onClick={handleReturnHome}
-            className="w-full sm:w-auto shadow-xs"
-          >
-            Quay về trang chủ
-          </Button>
-        </div>
+      <div className="flex w-full max-w-md flex-col items-center text-center">
+        <IconTile icon={<ShieldAlert />} tone="warning" size="xl" />
+        <h1 id="forbidden-heading" className="mt-6 text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+          Trang này dành cho vai trò khác
+        </h1>
+        <p className="mt-3 text-base leading-relaxed text-ink-2">{message}</p>
+        <p className="mt-2 text-sm text-ink-3">
+          Bạn đang đăng nhập với vai trò <span className="font-semibold text-ink-2">{ROLE_LABELS[role]}</span>. Nếu
+          cần quyền truy cập, vui lòng liên hệ Ban Giáo lý.
+        </p>
+        <Button size="lg" leftIcon={<Home />} onClick={handleReturnHome} className="mt-8 w-full sm:w-auto">
+          Về trang chủ
+        </Button>
+        <p className="mt-6 font-mono text-xs text-ink-3">Mã lỗi 403</p>
       </div>
-    </div>
+    </section>
   );
 };

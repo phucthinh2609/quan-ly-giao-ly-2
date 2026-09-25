@@ -1,7 +1,11 @@
-import React, { useState, useMemo } from "react";
-import { Bell, ArrowRight } from "lucide-react";
+import React, { useId, useMemo, useState } from "react";
+import { ArrowRight, BellOff } from "lucide-react";
 import { NotificationData } from "../../types";
+import { cn } from "../../lib/cn";
+import { Button } from "../ui/Button";
+import { IconTile } from "../ui/IconTile";
 import { NotificationCard } from "./NotificationCard";
+import { NotificationCardSkeleton } from "./NotificationList";
 import { NotificationDetailModal } from "./NotificationDetailModal";
 import { sortNotificationsByPriority } from "../../services/parentMockData";
 
@@ -11,115 +15,95 @@ export interface NotificationPreviewProps {
   onSelectNotification?: (item: NotificationData) => void;
   isLoading?: boolean;
   className?: string;
+  /** Tiêu đề khối (mặc định "Thông báo mới") */
+  title?: string;
+  /** Số thông báo hiển thị (mặc định 3) */
+  limit?: number;
+  /** Hành động liên quan trong chi tiết; không truyền → mở "Xem tất cả" */
+  onNavigateAction?: (path?: string) => void;
 }
 
 /**
- * NotificationPreview (§24, §30 ParentDashboard, Wireframe §11)
- *
- * Hiển thị 2-3 thông báo nổi bật ưu tiên cao nhất:
- * URGENT → STUDENT → CLASS → GENERAL
+ * NotificationPreview (03 §11) — danh sách gọn các thông báo ưu tiên cao nhất
+ * (Khẩn ghim đầu) + nút "Xem tất cả".
  */
 export const NotificationPreview: React.FC<NotificationPreviewProps> = ({
   notifications,
   onViewAll,
   onSelectNotification,
   isLoading = false,
-  className = "",
+  className,
+  title = "Thông báo mới",
+  limit = 3,
+  onNavigateAction,
 }) => {
   const [selectedNotification, setSelectedNotification] = useState<NotificationData | null>(null);
 
-  const topNotifications = useMemo(() => {
-    const sorted = sortNotificationsByPriority(notifications);
-    return sorted.slice(0, 3);
-  }, [notifications]);
+  const topNotifications = useMemo(
+    () => sortNotificationsByPriority(notifications).slice(0, limit),
+    [notifications, limit]
+  );
 
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
-  }, [notifications]);
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
 
   const handleCardClick = (item: NotificationData) => {
     setSelectedNotification(item);
-    if (onSelectNotification) {
-      onSelectNotification(item);
-    }
+    onSelectNotification?.(item);
   };
 
+  const headingId = useId();
+
   return (
-    <section aria-labelledby="notification-preview-heading" className={`space-y-3 ${className}`}>
-      {/* Section Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-[10px] bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-[#B4232C]">
-            <Bell className="w-5 h-5" />
-          </div>
-          <div>
-            <h3
-              id="notification-preview-heading"
-              className="text-[19px] sm:text-[20px] font-bold text-[#1C1917] font-serif"
-            >
-              Thông báo mới
-            </h3>
-            <p className="text-[13px] text-[#78716C]">
-              {unreadCount > 0
-                ? `Có ${unreadCount} thông báo chưa đọc`
-                : "Tất cả thông báo đã xem"}
-            </p>
-          </div>
+    <section aria-labelledby={headingId} className={cn("space-y-3", className)}>
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <h2 id={headingId} className="text-xl font-semibold tracking-tight text-ink">
+            {title}
+          </h2>
+          <p className="text-sm text-ink-2">
+            {isLoading
+              ? "Đang tải thông báo"
+              : unreadCount > 0
+              ? `${unreadCount} thông báo chưa đọc`
+              : "Bạn đã đọc hết thông báo"}
+          </p>
         </div>
 
-        {/* View all button - RULE-010: touch target >= 52px, RULE-012: text + icon */}
         {onViewAll && (
-          <button
-            type="button"
-            onClick={onViewAll}
-            className="min-h-[52px] px-4 py-2 text-[16px] sm:text-[17px] font-bold text-[#B4232C] hover:text-[#9B1C24] hover:bg-[#FFF1F2] rounded-[12px] transition-colors cursor-pointer flex items-center gap-1.5"
-          >
-            <span>Xem tất cả</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <Button variant="ghost" rightIcon={<ArrowRight />} onClick={onViewAll} className="-mr-3">
+            Xem tất cả
+          </Button>
         )}
       </div>
 
-      {/* Cards List or Skeleton */}
       {isLoading ? (
-        <div className="space-y-2.5">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="p-4 rounded-[14px] bg-white border border-[#E7E5E4] animate-pulse flex items-center gap-3 min-h-[56px]"
-            >
-              <div className="w-10 h-10 rounded-[10px] bg-[#E7E5E4]" />
-              <div className="flex-1 space-y-1.5">
-                <div className="h-4 bg-[#E7E5E4] rounded-md w-1/3" />
-                <div className="h-4 bg-[#E7E5E4] rounded-md w-2/3" />
-              </div>
-            </div>
+        <div className="space-y-2.5" role="status" aria-label="Đang tải thông báo">
+          {[0, 1].map((i) => (
+            <NotificationCardSkeleton key={i} compact />
           ))}
         </div>
       ) : topNotifications.length === 0 ? (
-        <div className="p-5 text-center bg-white rounded-[14px] border border-[#E7E5E4] text-[#78716C] text-[15px]">
-          Chưa có thông báo nào dành cho học sinh.
+        <div className="flex items-center gap-3 rounded-card border border-line bg-surface p-4">
+          <IconTile icon={<BellOff />} tone="neutral" size="md" />
+          <p className="text-base text-ink-2">Chưa có thông báo nào.</p>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <ul className="space-y-2.5">
           {topNotifications.map((item) => (
-            <NotificationCard
-              key={item.id}
-              notification={item}
-              compact
-              onClick={handleCardClick}
-            />
+            <li key={item.id}>
+              <NotificationCard notification={item} compact onClick={handleCardClick} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
-      {/* Modal */}
       <NotificationDetailModal
         notification={selectedNotification}
         isOpen={Boolean(selectedNotification)}
         onClose={() => setSelectedNotification(null)}
-        onActionClick={() => {
-          if (onViewAll) onViewAll();
+        onActionClick={(path) => {
+          if (onNavigateAction) onNavigateAction(path);
+          else onViewAll?.();
         }}
       />
     </section>

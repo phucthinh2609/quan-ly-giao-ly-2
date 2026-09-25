@@ -1,11 +1,14 @@
 import React from "react";
+import { ClipboardX } from "lucide-react";
 import { LinkedStudent, AcademicPeriod, StudentAcademicReport, SubjectScoreSummary } from "../../types";
+import { cn } from "../../lib/cn";
+import { EmptyState } from "../ui/EmptyState";
+import { Skeleton } from "../ui/Skeleton";
 import { ParentChildSwitcher } from "./ParentChildSwitcher";
 import { AcademicPeriodSelector } from "./AcademicPeriodSelector";
 import { GPAHighlight } from "./GPAHighlight";
 import { SubjectScoreCard } from "./SubjectScoreCard";
 import { TeacherComment } from "./TeacherComment";
-import { BookOpen, RefreshCw } from "lucide-react";
 
 export interface ParentGradeOverviewProps {
   linkedStudents: LinkedStudent[];
@@ -17,30 +20,28 @@ export interface ParentGradeOverviewProps {
   isLoading?: boolean;
   onSelectSubject?: (subject: SubjectScoreSummary) => void;
   className?: string;
+  /** Ẩn chip chọn con khi trang đã hiển thị ở trên (mặc định hiện) */
+  showChildSwitcher?: boolean;
 }
 
+const SubjectSkeleton: React.FC = () => (
+  <div aria-hidden="true" className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+    <div className="flex items-start gap-3">
+      <Skeleton className="size-10 shrink-0 rounded-control" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-5 w-2/3 rounded-full" />
+        <Skeleton className="h-4 w-1/4 rounded-full" />
+      </div>
+      <Skeleton className="h-9 w-14 rounded-full" />
+    </div>
+    <Skeleton className="mt-4 h-1.5 w-full rounded-full" />
+    <Skeleton className="mt-3 h-5 w-1/2 rounded-full" />
+  </div>
+);
+
 /**
- * ParentGradeOverview (Tier 5 Feature Component - §27, §30, Wireframe C §8, Sitemap §11)
- *
- * Component Tree Hierarchy:
- * <ParentGradeOverview>
- * ├── <ParentChildSwitcher />
- * ├── <AcademicPeriodSelector />
- * ├── <GPAHighlight />
- * ├── <SubjectSummaryList> (<SubjectScoreCard /> × N)
- * └── <TeacherComment />
- *
- * Information Priority Sequence (Strictly enforced per Sitemap §11):
- * 1. Học sinh (ParentChildSwitcher)
- * 2. Kỳ / năm học (AcademicPeriodSelector)
- * 3. Điểm trung bình (GPAHighlight)
- * 4. Danh sách môn (SubjectSummaryList)
- * 5. Chi tiết điểm (Expandable on SubjectScoreCard)
- * 6. Nhận xét (TeacherComment)
- *
- * Constraints:
- * - Controls font-size ≥18px, touch target ≥52–56px (RULE-010).
- * - No icon-only for critical actions (RULE-012).
+ * ParentGradeOverview (02 §13, 04 §11)
+ * Con → Kỳ học → Điểm TB (số lớn + xếp loại) → Môn → Thành phần → Nhận xét GLV.
  */
 export const ParentGradeOverview: React.FC<ParentGradeOverviewProps> = ({
   linkedStudents,
@@ -51,110 +52,79 @@ export const ParentGradeOverview: React.FC<ParentGradeOverviewProps> = ({
   report,
   isLoading = false,
   onSelectSubject,
-  className = "",
+  className,
+  showChildSwitcher = true,
 }) => {
+  const loading = isLoading || !report;
+
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* =================================================================== */}
-      {/* 1. HỌC SINH (ParentChildSwitcher)                                   */}
-      {/* =================================================================== */}
-      <section aria-label="1. Chọn học sinh con">
+    <div className={cn("space-y-6", className)}>
+      {showChildSwitcher && (
         <ParentChildSwitcher
           students={linkedStudents}
           selectedChildId={selectedChildId}
           onChange={onChildChange}
           isLoading={isLoading}
         />
-      </section>
+      )}
 
-      {/* =================================================================== */}
-      {/* 2. KỲ / NĂM HỌC (AcademicPeriodSelector)                            */}
-      {/* =================================================================== */}
-      <section aria-label="2. Chọn kỳ học">
-        <AcademicPeriodSelector
-          selectedPeriod={selectedPeriod}
-          onChange={onPeriodChange}
-          isLoading={isLoading}
-        />
-      </section>
+      <AcademicPeriodSelector selectedPeriod={selectedPeriod} onChange={onPeriodChange} isLoading={isLoading} />
 
-      {/* Loading Skeleton if report is being fetched */}
-      {isLoading || !report ? (
-        <div className="space-y-6 animate-pulse">
-          {/* GPA Skeleton */}
-          <div className="h-[180px] rounded-[18px] bg-[#FFFBEB] border border-[#FDE68A] flex flex-col items-center justify-center space-y-3">
-            <RefreshCw className="w-8 h-8 text-[#E3B341] animate-spin" />
-            <span className="text-[16px] font-semibold text-[#92400E]">
-              Đang làm mới bảng điểm của con...
-            </span>
-          </div>
-
-          {/* Subjects Skeleton */}
-          <div className="space-y-3">
-            <div className="h-6 bg-[#E7E5E4] rounded-md w-1/3" />
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-[110px] rounded-[16px] bg-white border border-[#E7E5E4]"
-              />
+      {loading ? (
+        <div className="space-y-6" role="status" aria-label="Đang tải bảng điểm">
+          <GPAHighlight gpa={0} isLoading />
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+            {[0, 1, 2, 3].map((i) => (
+              <SubjectSkeleton key={i} />
             ))}
           </div>
-
-          {/* Comment Skeleton */}
-          <div className="h-[100px] rounded-[16px] bg-white border border-[#E7E5E4]" />
+          <div aria-hidden="true" className="space-y-3 rounded-card border border-line bg-surface p-5 shadow-card sm:p-6">
+            <Skeleton className="h-6 w-1/3 rounded-full" />
+            <Skeleton className="h-5 w-full rounded-full" />
+            <Skeleton className="h-5 w-4/5 rounded-full" />
+          </div>
         </div>
       ) : (
         <>
-          {/* =================================================================== */}
-          {/* 3. ĐIỂM TRUNG BÌNH (GPAHighlight)                                   */}
-          {/* =================================================================== */}
-          <section aria-label="3. Điểm trung bình chung">
+          <div data-reveal>
             <GPAHighlight
               gpa={report.gpa}
               rankLabel={report.rankLabel}
               periodLabel={report.periodLabel}
               rankColor={report.rankColor}
             />
-          </section>
+          </div>
 
-          {/* =================================================================== */}
-          {/* 4 & 5. DANH SÁCH MÔN & CHI TIẾT ĐIỂM (SubjectSummaryList)           */}
-          {/* =================================================================== */}
-          <section aria-label="4. Kết quả theo môn học" className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-[#B4232C]" />
-                <h3 className="text-[19px] sm:text-[20px] font-bold text-[#1C1917] font-serif">
-                  KẾT QUẢ THEO MÔN
-                </h3>
+          <section aria-labelledby="subject-results-heading" className="space-y-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 id="subject-results-heading" className="text-xl font-semibold tracking-tight text-ink">
+                Kết quả theo môn
+              </h2>
+              <p className="text-sm text-ink-3">{report.subjects.length} môn</p>
+            </div>
+
+            {report.subjects.length === 0 ? (
+              <EmptyState
+                icon={<ClipboardX />}
+                title="Chưa có bảng điểm"
+                description="Điểm sẽ hiện khi GLV cập nhật."
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+                {report.subjects.map((subject) => (
+                  <div key={subject.subjectId} data-reveal>
+                    <SubjectScoreCard subject={subject} onSelect={onSelectSubject} className="h-full" />
+                  </div>
+                ))}
               </div>
-              <span className="text-[14px] font-medium text-[#78716C]">
-                {report.subjects.length} môn học
-              </span>
-            </div>
-
-            {/* List of SubjectScoreCard */}
-            <div className="space-y-3">
-              {report.subjects.map((subject, index) => (
-                <SubjectScoreCard
-                  key={subject.subjectId}
-                  subject={subject}
-                  defaultExpanded={index === 0} // Expand first subject for immediate detail
-                  onSelect={onSelectSubject}
-                />
-              ))}
-            </div>
+            )}
           </section>
 
-          {/* =================================================================== */}
-          {/* 6. NHẬN XÉT CỦA GLV (TeacherComment)                                */}
-          {/* =================================================================== */}
-          <section aria-label="6. Nhận xét của Giáo lý viên">
-            <TeacherComment
-              comment={report.teacherComment}
-              teacherName={report.teacherName}
-            />
-          </section>
+          {report.teacherComment && (
+            <div data-reveal>
+              <TeacherComment comment={report.teacherComment} teacherName={report.teacherName} />
+            </div>
+          )}
         </>
       )}
     </div>

@@ -1,797 +1,539 @@
-# 01 — DESIGN SYSTEM & DESIGN TOKENS
+# 01 — DESIGN SYSTEM & DESIGN TOKENS v2 ("Lumen")
 
 ## Nền tảng
 **Quản lý Học tập Giáo lý – Đoàn Kitô Vua**
+
+> v2 thay thế toàn bộ v1. Nguồn token duy nhất: `src/tokens.css` (được import bởi `src/index.css`).
+> Tailwind CSS v4 đọc token qua `@theme inline` → mọi utility (`bg-surface`, `text-ink`...) tự đổi theo Light/Dark và vai trò.
 
 ## 1. Design Principles
 
 | Principle | Quy tắc triển khai |
 |---|---|
-| Mobile-first | Thiết kế từ viewport 320px trở lên, sau đó mở rộng cho tablet/iPad/desktop |
-| Touch-first | Tất cả vùng thao tác chính có kích thước tối thiểu 44×44px |
-| Fast Input | Điểm danh/nhập điểm ưu tiên thao tác 1 tay, giảm số lần chuyển màn hình |
-| Clear Hierarchy | Mỗi màn hình chỉ có 1 Primary Action chính |
-| Elder-friendly | Chữ dễ đọc, tương phản cao, khoảng cách rộng, hạn chế menu lồng nhiều tầng |
-| Child-friendly | Gamification dùng màu/accent/icon nhưng không làm ảnh hưởng khả năng đọc |
-| Accessible | Không chỉ dùng màu để thể hiện trạng thái; luôn có icon/text hỗ trợ |
-| Consistent | Cùng một token được dùng xuyên suốt hệ thống |
-| Faith & Community | Nhận diện mang tính cộng đồng Công giáo nhưng UI hiện đại, không quá trang trí |
+| Warm Modern | Nền ngà ấm, chữ mực nâu than, đỏ Kitô Vua cho hành động, vàng cho thành tích |
+| Mobile-first | Thiết kế từ 320px; tham chiếu 375px; mở rộng tablet/desktop |
+| Touch-first | Vùng chạm ≥ 44px; Phụ huynh/Học sinh ≥ 52–56px |
+| Scalable | Mọi kích thước bằng `rem` → cỡ chữ người dùng chọn co giãn toàn UI |
+| Role-adaptive | `data-role` trên AppShell đổi mật độ, bo góc, chiều cao control |
+| Themeable | `data-theme="light" | "dark"` trên `<html>` |
+| Accessible | Tương phản chữ ≥ 4.5:1; không chỉ dùng màu; focus ring luôn thấy |
+| Faith & Community | Chất liệu ấm, ánh sáng, trích dẫn bằng serif nghiêng; không trang trí rườm rà |
 
 ## 2. Brand Direction
 
-**Keyword:** `Tin cậy` · `Ấm áp` · `Hiện đại` · `Rõ ràng` · `Cộng đồng` · `Thân thiện`
+**Keyword:** `Ấm áp` · `Hiện đại` · `Tin cậy` · `Vui tươi (khu Học sinh)` · `Rõ ràng (khu Phụ huynh)` · `Nhanh (khu GLV)`
 
-Không dùng đỏ/vàng quá chói. Đỏ chuyển sang sắc trầm; vàng ấm; nền hơi ấm; text chính là xám than/navy đậm.
+- Đỏ Kitô Vua `#B4232C` giữ nguyên làm nhận diện, dùng cho **Primary action** và điểm nhấn thương hiệu.
+- Vàng `#E3B341` cho huy hiệu, level, thành tích, highlight.
+- Nền không dùng xám lạnh: chuyển sang **ngà ấm** `#F7F3ED`.
+- Khối "night" (nâu than `#1C1714`) dùng cho hero card, CTA lớn — tạo nhịp tương phản cao cấp.
 
-## 3. Brand Color — Primary Red
+## 3. Color — Semantic tokens
 
-| Token | Hex | Usage |
-|---|---:|---|
-| `primary-50` | `#FFF1F2` | Background rất nhẹ |
-| `primary-100` | `#FFE4E6` | Selected background |
-| `primary-200` | `#FECDD3` | Border/highlight |
-| `primary-300` | `#FDA4AF` | Decorative |
-| `primary-400` | `#FB7185` | Hover-light |
-| `primary-500` | `#D64550` | Brand accent |
-| `primary-600` | `#B4232C` | **Primary Brand** |
-| `primary-700` | `#941D25` | Hover / pressed |
-| `primary-800` | `#7A1A21` | Strong emphasis |
-| `primary-900` | `#641A1E` | Deep accent |
+Component **chỉ** dùng semantic token. Không dùng hex, không dùng palette mặc định của Tailwind.
 
-**Primary brand mặc định:** `#B4232C`
+### 3.1 Surface & Text
 
-## 4. Brand Gold
-
-| Token | Hex | Usage |
-|---|---:|---|
-| `gold-50` | `#FFFBEB` | Background |
-| `gold-100` | `#FEF3C7` | Highlight |
-| `gold-200` | `#FDE68A` | Soft accent |
-| `gold-300` | `#FCD34D` | Decorative |
-| `gold-400` | `#F4C95D` | Accent |
-| `gold-500` | `#E3B341` | **Brand Gold** |
-| `gold-600` | `#C99526` | Strong accent |
-| `gold-700` | `#A87917` | Dark accent |
-| `gold-800` | `#8B6419` | Text/emphasis |
-
-Gold chủ yếu dùng cho huy hiệu, thành tích, rank/level, highlight và chi tiết thương hiệu; không dùng cho quá nhiều Primary Button.
-
-## 5. Neutral Color System
-
-| Token | Hex | Usage |
-|---|---:|---|
-| `neutral-0` | `#FFFFFF` | Card / surface |
-| `neutral-50` | `#FAFAF9` | App background |
-| `neutral-100` | `#F5F5F4` | Secondary background |
-| `neutral-200` | `#E7E5E4` | Divider / border |
-| `neutral-300` | `#D6D3D1` | Disabled border |
-| `neutral-400` | `#A8A29E` | Placeholder |
-| `neutral-500` | `#78716C` | Secondary text |
-| `neutral-600` | `#57534E` | Body secondary |
-| `neutral-700` | `#44403C` | Body primary |
-| `neutral-800` | `#292524` | Heading/body emphasis |
-| `neutral-900` | `#1C1917` | Strongest text |
-
-Không dùng `#000000` cho text thông thường. Text chính `neutral-800`, text phụ `neutral-600`, placeholder `neutral-400`, border `neutral-200`.
-
-## 6. Semantic Colors
-
-### Success
-`success-50 #ECFDF3` · `success-100 #D1FAE5` · `success-500 #22A06B` · `success-600 #168154` · `success-700 #146C47`
-
-### Error
-`error-50 #FEF2F2` · `error-100 #FEE2E2` · `error-500 #DC4C4C` · `error-600 #C73A3A` · `error-700 #A52D2D`
-
-### Warning
-`warning-50 #FFF8E7` · `warning-100 #FEF0C7` · `warning-500 #D9901A` · `warning-600 #B86F08` · `warning-700 #925A0A`
-
-### Info
-`info-50 #EFF6FF` · `info-100 #DBEAFE` · `info-500 #3B82F6` · `info-600 #2563EB` · `info-700 #1D4ED8`
-
-## 7. Gamification Colors
-
-| Token | Hex | Usage |
-|---|---:|---|
-| `game-purple` | `#7C5CFC` | XP / Level |
-| `game-blue` | `#3B82F6` | Mission |
-| `game-cyan` | `#18B7C9` | Progress |
-| `game-orange` | `#F28C28` | Streak |
-| `game-gold` | `#E3B341` | Badge / Achievement |
-| `game-pink` | `#E86A92` | Friendly accent |
-
-Chỉ tăng visual richness ở khu vực học sinh.
-
-## 8. Semantic UI Tokens
-
-```css
-:root {
-  --color-bg-page: var(--color-neutral-50);
-  --color-bg-surface: var(--color-neutral-0);
-  --color-bg-muted: var(--color-neutral-100);
-
-  --color-text-primary: var(--color-neutral-800);
-  --color-text-secondary: var(--color-neutral-600);
-  --color-text-muted: var(--color-neutral-400);
-  --color-text-inverse: var(--color-neutral-0);
-
-  --color-border-default: var(--color-neutral-200);
-  --color-border-strong: var(--color-neutral-300);
-
-  --color-primary: var(--color-primary-600);
-  --color-primary-hover: var(--color-primary-700);
-  --color-primary-active: var(--color-primary-800);
-  --color-primary-soft: var(--color-primary-50);
-
-  --color-accent: var(--color-gold-500);
-  --color-accent-soft: var(--color-gold-50);
-
-  --color-success: var(--color-success-600);
-  --color-success-soft: var(--color-success-50);
-
-  --color-warning: var(--color-warning-600);
-  --color-warning-soft: var(--color-warning-50);
-
-  --color-error: var(--color-error-600);
-  --color-error-soft: var(--color-error-50);
-
-  --color-info: var(--color-info-600);
-  --color-info-soft: var(--color-info-50);
-}
-```
-
-## 9. Typography
-
-### Heading — Serif
-
-Ưu tiên:
-```text
-"Noto Serif", "Source Serif 4", "Georgia", serif
-```
-
-### Body — Sans-serif
-
-Ưu tiên:
-```text
-"Inter", "Noto Sans", "Segoe UI", sans-serif
-```
-
-Inter là font UI mặc định; Noto Serif phù hợp heading tiếng Việt và ngữ cảnh Giáo lý.
-
-## 10. Typography Scale
-
-| Token | Size | Line Height | Weight | Usage |
-|---|---:|---:|---:|---|
-| `display-xl` | 40px | 1.15 | 700 | Hero / desktop |
-| `display-lg` | 32px | 1.2 | 700 | Page hero |
-| `heading-xl` | 28px | 1.25 | 700 | H1 |
-| `heading-lg` | 24px | 1.3 | 700 | H2 |
-| `heading-md` | 20px | 1.35 | 700 | H3 |
-| `heading-sm` | 18px | 1.4 | 700 | Section title |
-| `body-lg` | 18px | 1.55 | 400 | Parent-facing |
-| `body-md` | 16px | 1.5 | 400 | Default body |
-| `body-sm` | 14px | 1.45 | 400 | Supporting |
-| `caption` | 12px | 1.4 | 500 | Metadata |
-| `button-lg` | 16px | 1.0 | 600 | Large button |
-| `button-md` | 15px | 1.0 | 600 | Default button |
-| `button-sm` | 14px | 1.0 | 600 | Compact |
-| `input-md` | 16px | 1.0 | 400 | Form input |
-
-Input không nhỏ hơn 16px. Parent ưu tiên body 18px.
-
-## 11. Typography CSS
-
-```css
-:root {
-  --font-family-heading:
-    "Noto Serif",
-    "Source Serif 4",
-    Georgia,
-    serif;
-
-  --font-family-body:
-    "Inter",
-    "Noto Sans",
-    "Segoe UI",
-    sans-serif;
-
-  --font-size-display-xl: 40px;
-  --font-size-display-lg: 32px;
-  --font-size-heading-xl: 28px;
-  --font-size-heading-lg: 24px;
-  --font-size-heading-md: 20px;
-  --font-size-heading-sm: 18px;
-  --font-size-body-lg: 18px;
-  --font-size-body-md: 16px;
-  --font-size-body-sm: 14px;
-  --font-size-caption: 12px;
-  --font-size-button-lg: 16px;
-  --font-size-button-md: 15px;
-  --font-size-button-sm: 14px;
-  --font-size-input-md: 16px;
-
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  --line-height-tight: 1.15;
-  --line-height-heading: 1.3;
-  --line-height-body: 1.5;
-  --line-height-relaxed: 1.6;
-}
-```
-
-## 12. Spacing
-
-Base unit = **4px**.
-
-| Token | Value |
-|---|---:|
-| `space-0` | 0px |
-| `space-1` | 4px |
-| `space-2` | 8px |
-| `space-3` | 12px |
-| `space-4` | 16px |
-| `space-5` | 20px |
-| `space-6` | 24px |
-| `space-8` | 32px |
-| `space-10` | 40px |
-| `space-12` | 48px |
-| `space-16` | 64px |
-| `space-20` | 80px |
-
-```css
-:root {
-  --space-0: 0px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --space-20: 80px;
-}
-```
-
-## 13. Layout
-
-```css
-:root {
-  --container-mobile: 100%;
-  --container-tablet: 768px;
-  --container-desktop: 1200px;
-  --container-wide: 1440px;
-
-  --page-padding-mobile: 16px;
-  --page-padding-tablet: 24px;
-  --page-padding-desktop: 32px;
-}
-```
-
-## 14. Radius
-
-| Token | Value | Usage |
-|---|---:|---|
-| `radius-none` | 0px | Special |
-| `radius-sm` | 6px | Small UI |
-| `radius-md` | 10px | Input/Button |
-| `radius-lg` | 14px | Card |
-| `radius-xl` | 18px | Large card |
-| `radius-2xl` | 24px | Feature card |
-| `radius-full` | 9999px | Avatar/Badge/Pill |
-
-## 15. Shadows
-
-```css
-:root {
-  --shadow-xs: 0 1px 2px rgba(28,25,23,.05);
-  --shadow-sm: 0 2px 6px rgba(28,25,23,.07);
-  --shadow-md: 0 6px 16px rgba(28,25,23,.08);
-  --shadow-lg: 0 12px 28px rgba(28,25,23,.10);
-  --shadow-xl: 0 18px 40px rgba(28,25,23,.12);
-}
-```
-
-Card mặc định shadow nhẹ; không lạm dụng glassmorphism/3D.
-
-## 16. Z-index
-
-```css
-:root {
-  --z-base: 0;
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-header: 300;
-  --z-overlay: 400;
-  --z-modal: 500;
-  --z-popover: 600;
-  --z-toast: 700;
-  --z-tooltip: 800;
-}
-```
-
-## 17. Iconography
-
-Đề xuất **Lucide Icons**.
-
-```text
-Stroke: 2px
-Linecap: round
-Linejoin: round
-```
-
-Không trộn nhiều icon family.
-
-| Token | Size | Usage |
-|---|---:|---|
-| `icon-xs` | 14px | Metadata |
-| `icon-sm` | 16px | Inline |
-| `icon-md` | 20px | Default |
-| `icon-lg` | 24px | Navigation |
-| `icon-xl` | 32px | Feature |
-| `icon-2xl` | 40px | Empty state |
-| `icon-3xl` | 48px | Gamification |
-
-## 18. Touch Targets
-
-```css
-:root {
-  --touch-target-min: 44px;
-  --touch-target-comfortable: 48px;
-  --touch-target-large: 52px;
-  --touch-target-parent: 56px;
-}
-```
-
-| Role | Khuyến nghị |
-|---|---:|
-| Admin | 44–48px |
-| GLV | 48–52px |
-| Parent | 52–56px |
-| Student | 48–56px |
-
-## 19. Button
-
-```css
-:root {
-  --button-height-sm: 36px;
-  --button-height-md: 44px;
-  --button-height-lg: 52px;
-  --button-height-parent: 56px;
-  --button-radius: 10px;
-  --button-font-weight: 600;
-}
-```
-
-Variants: `primary`, `secondary`, `outline`, `ghost`, `danger`.
-
-States: `DEFAULT`, `HOVER`, `FOCUS`, `ACTIVE`, `DISABLED`, `LOADING`.
-
-## 20. Input
-
-```css
-:root {
-  --input-height-sm: 40px;
-  --input-height-md: 48px;
-  --input-height-lg: 52px;
-  --input-height-parent: 56px;
-  --input-padding-x: 16px;
-  --input-radius: 10px;
-  --input-font-size: 16px;
-  --input-line-height: 1.4;
-}
-```
-
-States: Default, Hover, Focus, Filled, Disabled, Readonly, Error.
-
-## 21. Focus
-
-```css
-:root {
-  --focus-ring-width: 3px;
-  --focus-ring-offset: 2px;
-  --focus-ring-color: rgba(180, 35, 44, 0.22);
-}
-
-:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
-}
-```
-
-## 22. Motion
-
-```css
-:root {
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
-
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-```
-
-Animation chỉ hỗ trợ hiểu trạng thái; không dùng quá mức cho nghiệp vụ.
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-```
-
-## 23. Breakpoints
-
-```css
-:root {
-  --breakpoint-sm: 480px;
-  --breakpoint-md: 768px;
-  --breakpoint-lg: 1024px;
-  --breakpoint-xl: 1280px;
-  --breakpoint-2xl: 1440px;
-}
-```
-
-## 24. Surface Hierarchy
-
-```text
-Level 0 — Page Background
-Level 1 — Section Background
-Level 2 — Card / Panel
-Level 3 — Modal / Popover / Floating UI
-```
-
-## 25. Role-based Visual Density
-
-| Role | Density | Base Font | Control |
+| Token (utility) | Light | Dark | Usage |
 |---|---|---|---|
-| Admin | Compact | 14–16px | 44–48px |
-| GLV | Comfortable | 16px | 48–52px |
-| Parent | Spacious | 17–18px | 52–56px |
-| Student | Comfortable | 16–18px | 48–56px |
+| `canvas` | `#F7F3ED` | `#110F0D` | Nền trang |
+| `surface` | `#FFFFFF` | `#1A1714` | Card, sheet, input |
+| `surface-2` | `#F2ECE3` | `#231F1B` | Nền phụ, hàng xen kẽ, track |
+| `surface-3` | `#E9E1D5` | `#2E2924` | Pressed, skeleton, divider đậm |
+| `ink` | `#1C1714` | `#F5EFE7` | Chữ chính, heading |
+| `ink-2` | `#574D45` | `#C2B7AB` | Chữ phụ, body secondary |
+| `ink-3` | `#7A6F66` | `#948A7F` | Metadata, placeholder (≥ 4.5:1 trên surface) |
+| `line` | `#E7DFD4` | `#2F2A25` | Border mặc định |
+| `line-strong` | `#D4C8B9` | `#433C35` | Border input, divider rõ |
+| `night` | `#1C1714` | `#2A221D` | Khối tối nổi bật (hero, CTA) ở cả 2 theme |
+| `on-night` | `#F7F3ED` | `#F7F3ED` | Chữ trên `night` |
 
-### Parent Mode
+### 3.2 Brand
+
+| Token | Light | Dark | Usage |
+|---|---|---|---|
+| `primary` | `#B4232C` | `#D93B44` | Nền nút chính, fill thương hiệu |
+| `primary-hover` | `#971C24` | `#C5323B` | Hover/pressed |
+| `primary-soft` | `#FBE9EA` | `#3A2020` | Nền chọn, badge nhẹ |
+| `primary-ink` | `#9E1F27` | `#FF9A9F` | **Chữ** màu thương hiệu trên surface/soft |
+| `on-primary` | `#FFFFFF` | `#FFFFFF` | Chữ trên `primary` |
+| `gold` | `#E3B341` | `#EDBE52` | Huy hiệu, level, sao |
+| `gold-soft` | `#FBF1D6` | `#3A2F16` | Nền thành tích |
+| `gold-ink` | `#7A5610` | `#F3CF7A` | Chữ trên `gold-soft` |
+
+Quy tắc: chữ nhỏ màu thương hiệu dùng `text-primary-ink`; `text-primary` chỉ cho icon/chữ lớn đậm.
+
+### 3.3 Status
+
+| Token | Light | Dark | Soft (Light / Dark) |
+|---|---|---|---|
+| `success` | `#157A4F` | `#3CC48A` | `#E4F3EA` / `#15291F` |
+| `warning` | `#A15F05` | `#F0A93A` | `#FCEFD9` / `#33260F` |
+| `danger` | `#C23636` | `#F06A6A` | `#FBE8E7` / `#361A1A` |
+| `info` | `#2358D8` | `#6D9BFF` | `#E6EEFD` / `#172440` |
+| `on-solid` | `#FFFFFF` | `#12100E` | Chữ trên nền status **đặc** |
+
+Pattern chuẩn: nền `*-soft` + chữ/icon `text-*`. Nền đặc `bg-success` phải đi với `text-on-solid`.
+
+### 3.4 Kid palette (khu Học sinh, gamification, minh họa)
+
+| Token | Light | Dark | Soft Light / Dark | Ý nghĩa |
+|---|---|---|---|---|
+| `sky` | `#3E86F5` | `#6AA3FF` | `#E3EEFE` / `#16233B` | Nhiệm vụ |
+| `mint` | `#16A57A` | `#3CD3A2` | `#DDF4EC` / `#12291F` | Tiến bộ |
+| `sun` | `#F5A30B` | `#FFBD3D` | `#FEF1D3` / `#35280C` | Chuỗi (streak) |
+| `grape` | `#7C5CF6` | `#A08BFF` | `#EEE9FE` / `#231D3D` | XP / Level |
+| `coral` | `#F2624F` | `#FF8A7A` | `#FDE6E2` / `#3A1E1A` | Năng lượng |
+| `rose` | `#E0578F` | `#FF86B5` | `#FCE6EF` / `#3A1A28` | Thân thiện |
+
+Kid palette chỉ tăng độ phong phú ở khu Học sinh, landing và minh họa. Không dùng làm màu trạng thái nghiệp vụ.
+
+### 3.5 Trạng thái điểm danh (thay đổi so với v1)
+
+| Status | Nhãn | Màu | Icon (Lucide) | Lý do |
+|---|---|---|---|---|
+| PRESENT | Có mặt | `success` | `CheckCircle2` | |
+| ABSENT | Vắng | `danger` | `XCircle` | |
+| EXCUSED | Có phép | `info` | `FileCheck2` | v1 dùng vàng — dễ nhầm với cam "Đi muộn" |
+| LATE | Đi muộn | `warning` | `Clock` | |
+
+Luôn hiển thị icon + nhãn; không chỉ chấm màu.
+
+## 4. Typography
+
+### 4.1 Font stack
+
+| Vai trò | Font | Utility | Ghi chú |
+|---|---|---|---|
+| UI + Heading | **Geist** 400/500/600/700/800 | `font-sans` (mặc định) | Có subset `vietnamese` đầy đủ |
+| Số liệu, mã | **Geist Mono** 500/600 | `font-mono` | Điểm số, mã HS, thống kê. Có thể dùng `tabular-nums` với Geist |
+| Trích dẫn | **Fraunces** italic 400/600 | `font-accent` | Chỉ cho Lời Chúa, nhận xét GLV, 1 từ nhấn trong hero landing |
+
+**Cấm:** Inter, Noto Serif (v1), `font-serif`.
+
+```html
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@500;600&family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap" rel="stylesheet">
+```
+
+### 4.2 Type scale (rem — co giãn theo cỡ chữ người dùng)
+
+| Utility | rem | px @16 | Weight | Tracking | Usage |
+|---|---:|---:|---:|---|---|
+| `text-display` | clamp(2.25rem, 5vw, 5rem) | 36–80 | 700 | -0.035em | Hero landing |
+| `text-4xl` | 2.25 | 36 | 700 | -0.03em | Số lớn (điểm TB, level) |
+| `text-3xl` | 1.875 | 30 | 700 | -0.025em | H1 desktop |
+| `text-2xl` | 1.5 | 24 | 700 | -0.02em | H1 mobile / H2 desktop |
+| `text-xl` | 1.25 | 20 | 600 | -0.015em | H2 mobile / tiêu đề card lớn |
+| `text-lg` | 1.125 | 18 | 600 | -0.01em | Tiêu đề card, body Phụ huynh |
+| `text-base` | 1 | 16 | 400 | 0 | Body mặc định, input |
+| `text-sm` | 0.875 | 14 | 400/500 | 0 | Phụ trợ, label |
+| `text-xs` | 0.75 | 12 | 500 | 0.01em | Metadata (không dùng cho nội dung chính; không dùng ở khu Phụ huynh) |
+
+Quy tắc:
+- Input luôn `text-base` trở lên (tránh iOS zoom).
+- Heading: `font-bold tracking-tight` (hoặc `font-semibold`), line-height 1.15–1.3.
+- Body: line-height 1.55; Phụ huynh 1.6.
+- Không dùng `uppercase tracking-wider` cho tiêu đề nhóm (cảm giác meta-label rẻ tiền). Dùng sentence case `text-sm font-semibold text-ink-2`.
+
+### 4.3 Cỡ chữ người dùng (Text size preference)
+
 ```css
-:root {
-  --parent-font-size-base: 18px;
-  --parent-line-height: 1.6;
-  --parent-button-height: 56px;
-  --parent-input-height: 56px;
-  --parent-card-padding: 20px;
-  --parent-section-gap: 24px;
-  --parent-icon-size: 24px;
+html[data-text-size="md"] { font-size: 100%;   } /* 16px — Vừa (mặc định) */
+html[data-text-size="lg"] { font-size: 112.5%; } /* 18px — Lớn (mặc định Phụ huynh) */
+html[data-text-size="xl"] { font-size: 125%;   } /* 20px — Rất lớn */
+```
+
+Vì mọi kích thước dùng rem, đổi root font-size sẽ phóng to cả chữ, khoảng cách, control, icon (icon dùng `size-5` = 1.25rem).
+
+## 5. Spacing
+
+Dùng thang spacing mặc định của Tailwind (bội số 0.25rem = 4px @16). Không dùng giá trị px tùy ý.
+
+| Ngữ cảnh | Admin | GLV | Phụ huynh | Học sinh |
+|---|---|---|---|---|
+| Padding card | `p-4` | `p-4 sm:p-5` | `p-5 sm:p-6` | `p-5 sm:p-6` |
+| Gap giữa card | `gap-3 sm:gap-4` | `gap-3 sm:gap-4` | `gap-4 sm:gap-5` | `gap-4 sm:gap-5` |
+| Gap giữa section | `space-y-6` | `space-y-6` | `space-y-8` | `space-y-8` |
+| Page padding | `px-4 sm:px-6 lg:px-8` (mọi vai trò) |||
+
+Landing (`/welcome`) dùng khoảng cách điện ảnh `py-32 md:py-48` giữa các section.
+
+## 6. Radius
+
+| Token | Utility | Mặc định | STUDENT | Usage |
+|---|---|---:|---:|---|
+| `--radius-xs` | `rounded-xs` | 0.375rem | = | Tag nhỏ, checkbox |
+| `--radius-sm` | `rounded-sm` | 0.625rem | = | Chip nhỏ, tooltip |
+| `--radius-control` | `rounded-control` | 0.875rem | 1rem | Input, select, list item, tile |
+| `--radius-card` | `rounded-card` | 1.25rem | 1.5rem | Card |
+| `--radius-card-lg` | `rounded-card-lg` | 1.75rem | 2rem | Hero card, sheet, modal |
+| pill | `rounded-full` | 9999px | = | **Button**, badge, avatar, bottom nav |
+
+Button v2 mặc định bo tròn hoàn toàn (pill) — thân thiện với trẻ em và phụ huynh.
+
+## 7. Elevation
+
+| Utility | Light | Dark | Usage |
+|---|---|---|---|
+| `shadow-xs` | `0 1px 2px rgb(28 23 20 / .06)` | `0 1px 2px rgb(0 0 0 / .4)` | Control |
+| `shadow-card` | `0 1px 2px rgb(28 23 20 / .04), 0 6px 20px -8px rgb(28 23 20 / .10)` | `0 1px 2px rgb(0 0 0 / .5), 0 8px 24px -10px rgb(0 0 0 / .6)` | Card mặc định |
+| `shadow-float` | `0 16px 48px -16px rgb(28 23 20 / .30), 0 2px 8px rgb(28 23 20 / .06)` | `0 16px 48px -12px rgb(0 0 0 / .75)` | Bottom nav, popover, sheet |
+| `shadow-glow` | `0 10px 28px -10px rgb(180 35 44 / .55)` | `0 10px 28px -10px rgb(217 59 68 / .6)` | Nút chính nổi (FAB) |
+
+Surface hierarchy: `canvas` (L0) → `surface-2` (L1 section) → `surface` + `shadow-card` (L2 card) → `surface` + `shadow-float` (L3 floating).
+
+**Glass** (header, bottom nav, landing nav): `bg-surface/75 backdrop-blur-xl border border-line/70`.
+
+## 8. Iconography
+
+**Lucide** duy nhất. Stroke 2 (Học sinh có thể 2.25), linecap/linejoin round.
+
+| Size | Utility | Usage |
+|---|---|---|
+| 16 | `size-4` | Inline, metadata |
+| 20 | `size-5` | Mặc định, nav |
+| 24 | `size-6` | Nav Học sinh/Phụ huynh, tile |
+| 32 | `size-8` | Feature |
+| 40–48 | `size-10`/`size-12` | Empty state, huy hiệu |
+
+Icon tile: icon đặt trong khối `size-10 rounded-control bg-{color}-soft text-{color}` — tạo nhịp màu có kiểm soát.
+
+## 9. Controls
+
+### 9.1 Chiều cao control theo vai trò
+
+| Token | Utility | ADMIN | GLV | PARENT | STUDENT |
+|---|---|---:|---:|---:|---:|
+| `--control` | `h-(--control)` | 2.75rem (44) | 3rem (48) | 3.5rem (56) | 3.5rem (56) |
+| `--control-sm` | | 2.25rem | 2.25rem | 2.75rem | 2.75rem |
+| `--control-lg` | | 3.25rem | 3.25rem | 3.75rem | 3.75rem |
+
+Button `size="md"` = `--control`; `size="sm"` = `--control-sm`; `size="lg"` = `--control-lg`; `size="parent"` = 3.5rem cố định.
+
+### 9.2 Button
+
+Variants: `primary` (bg-primary, text-on-primary, shadow-glow khi hover), `secondary` (bg-night text-on-night), `outline` (bg-surface border-line-strong text-ink), `ghost` (text-ink-2 hover:bg-surface-2), `danger` (bg-danger text-on-solid).
+Hình dạng: `rounded-full`, font 600, gap icon 0.5rem.
+Press: `active:scale-[0.97]` transition 140ms. Loading giữ nguyên kích thước.
+
+### 9.3 Input
+
+Nền `surface`, border `line-strong`, bo `rounded-control`, `text-base`, cao `--control` (tối thiểu 3rem). Focus: border `primary` + ring `primary/20` 4px. Error: border `danger` + message có icon.
+
+## 10. Focus
+
+```css
+:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  outline-offset: 2px;
 }
 ```
 
-Không icon-only action cho thao tác quan trọng của Parent.
+## 11. Motion
 
-### GLV Fast Input
-```css
-:root {
-  --glv-input-height: 52px;
-  --glv-row-height: 60px;
-  --glv-touch-target: 52px;
-  --glv-grid-gap: 8px;
-  --glv-section-gap: 16px;
-}
+### 11.1 Token
+
+| Token | Giá trị | GSAP tương đương | Usage |
+|---|---|---|---|
+| `--ease-out-soft` | `cubic-bezier(0.22, 1, 0.36, 1)` | `power3.out` | Mặc định vào/ra |
+| `--ease-spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | `back.out(1.6)` | Chip, huy hiệu, FAB |
+| `--dur-fast` | 140ms | 0.14 | Press, hover |
+| `--dur-base` | 220ms | 0.22 | Toggle, popover |
+| `--dur-slow` | 420ms | 0.42 | Page enter, sheet |
+
+### 11.2 GSAP (thư viện `gsap` + `@gsap/react`, bọc trong `src/lib/motion.ts`)
+
+| Pattern | API | Mô tả |
+|---|---|---|
+| Stagger reveal | `useReveal(ref)` + `data-reveal` trên con | y 16 → 0, opacity 0 → 1, 0.5s, stagger 0.045 |
+| Page enter | AppShell tự áp khi đổi route | y 10 → 0, opacity, 0.28s |
+| Count up | `<CountUp value={128} decimals={0} />` | Đếm số 0.9s `power2.out` |
+| Progress fill | `<ProgressBar>` / `<ProgressRing>` | Lấp đầy từ 0 khi mount |
+| Celebrate | `celebrate(element)` | Burst 14 hạt màu kid palette, 0.9s |
+| Hover physics | CSS | Media trong `overflow-hidden`: `group-hover:scale-105 transition-transform duration-700 ease-out` |
+| Landing | ScrollTrigger | Card Stacking (pin + scale), Scrubbing Text Reveal (word opacity 0.12 → 1) |
+
+Tất cả pattern GSAP dùng `gsap.matchMedia()` với `(prefers-reduced-motion: no-preference)`; khi reduce → hiển thị trạng thái cuối ngay lập tức.
+
+## 12. Role-based adaptation (`data-role`)
+
+```text
+<div data-role="STUDENT" class="app-shell">...</div>
 ```
 
-### Student Gamification
+| Thuộc tính | ADMIN | GLV | PARENT | STUDENT |
+|---|---|---|---|---|
+| Density | Compact | Comfortable | Spacious | Playful |
+| Cỡ chữ mặc định | Vừa | Vừa | **Lớn** | Vừa |
+| `--control` | 44 | 48 | 56 | 56 |
+| `--radius-card` | 20 | 20 | 20 | 24 |
+| Bottom nav label | có | có | có (to hơn) | có (to hơn) |
+| Giọng văn | Chuyên môn | Ngắn, hành động | Lịch sự, đời thường ("Con...") | Thân thiện, xưng "em" |
+| Kid palette | Không | Không | Hạn chế | Có |
+| Nút trung tâm bottom nav | — | **Điểm danh** | — | — |
+
+Custom variant Tailwind: `student:`, `parent:`, `glv:`, `admin:` (VD `student:rounded-card-lg`).
+
+## 13. Z-index
+
+| Token | Giá trị |
+|---|---:|
+| `--z-sticky` | 20 |
+| `--z-header` | 30 |
+| `--z-nav` | 40 |
+| `--z-overlay` | 50 |
+| `--z-modal` | 60 |
+| `--z-toast` | 70 |
+| `--z-demo` | 80 |
+
+## 14. Breakpoints
+
+Mặc định Tailwind: `sm 640` · `md 768` · `lg 1024` · `xl 1280` · `2xl 1536`. Sidebar hiện từ `lg`; bottom nav hiện dưới `lg`.
+
+## 15. Data visualization
+
+| Token | Giá trị |
+|---|---|
+| `--chart-1` | `primary` |
+| `--chart-2` | `info` |
+| `--chart-3` | `success` |
+| `--chart-4` | `warning` |
+| `--chart-5` | `grape` |
+| grid | `line` |
+| label | `ink-3` |
+
+Tối đa 5 màu/biểu đồ; bar bo tròn `rounded-full`; luôn có nhãn số.
+
+## 16. Complete Token Source (`src/tokens.css`)
+
 ```css
-:root {
-  --student-xp-color: var(--game-purple);
-  --student-level-color: var(--game-blue);
-  --student-streak-color: var(--game-orange);
-  --student-badge-color: var(--game-gold);
-  --student-card-radius: 18px;
-  --student-progress-height: 10px;
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant student (&:where([data-role="STUDENT"], [data-role="STUDENT"] *));
+@custom-variant parent (&:where([data-role="PARENT"], [data-role="PARENT"] *));
+@custom-variant glv (&:where([data-role="GLV"], [data-role="GLV"] *));
+@custom-variant admin (&:where([data-role="ADMIN"], [data-role="ADMIN"] *));
+
+@theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --font-accent: "Fraunces", Georgia, serif;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-night: var(--night);
+  --color-on-night: var(--on-night);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-on-primary: var(--on-primary);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-ink: var(--gold-ink);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-on-solid: var(--on-solid);
+
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-mint: var(--mint);
+  --color-mint-soft: var(--mint-soft);
+  --color-sun: var(--sun);
+  --color-sun-soft: var(--sun-soft);
+  --color-grape: var(--grape);
+  --color-grape-soft: var(--grape-soft);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.625rem;
+  --radius-control: var(--r-control);
+  --radius-card: var(--r-card);
+  --radius-card-lg: var(--r-card-lg);
+
+  --shadow-xs: var(--elev-xs);
+  --shadow-card: var(--elev-card);
+  --shadow-float: var(--elev-float);
+  --shadow-glow: var(--elev-glow);
+
+  --text-display: clamp(2.25rem, 5vw, 5rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.035em;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+:root {
+  color-scheme: light;
+  --canvas: #F7F3ED;
+  --surface: #FFFFFF;
+  --surface-2: #F2ECE3;
+  --surface-3: #E9E1D5;
+  --ink: #1C1714;
+  --ink-2: #574D45;
+  --ink-3: #7A6F66;
+  --line: #E7DFD4;
+  --line-strong: #D4C8B9;
+  --night: #1C1714;
+  --on-night: #F7F3ED;
+
+  --primary: #B4232C;
+  --primary-hover: #971C24;
+  --primary-soft: #FBE9EA;
+  --primary-ink: #9E1F27;
+  --on-primary: #FFFFFF;
+  --gold: #E3B341;
+  --gold-soft: #FBF1D6;
+  --gold-ink: #7A5610;
+
+  --success: #157A4F;
+  --success-soft: #E4F3EA;
+  --warning: #A15F05;
+  --warning-soft: #FCEFD9;
+  --danger: #C23636;
+  --danger-soft: #FBE8E7;
+  --info: #2358D8;
+  --info-soft: #E6EEFD;
+  --on-solid: #FFFFFF;
+
+  --sky: #3E86F5;   --sky-soft: #E3EEFE;
+  --mint: #16A57A;  --mint-soft: #DDF4EC;
+  --sun: #F5A30B;   --sun-soft: #FEF1D3;
+  --grape: #7C5CF6; --grape-soft: #EEE9FE;
+  --coral: #F2624F; --coral-soft: #FDE6E2;
+  --rose: #E0578F;  --rose-soft: #FCE6EF;
+
+  --r-control: 0.875rem;
+  --r-card: 1.25rem;
+  --r-card-lg: 1.75rem;
+
+  --control: 2.75rem;
+  --control-sm: 2.25rem;
+  --control-lg: 3.25rem;
+
+  --elev-xs: 0 1px 2px rgb(28 23 20 / 0.06);
+  --elev-card: 0 1px 2px rgb(28 23 20 / 0.04), 0 6px 20px -8px rgb(28 23 20 / 0.10);
+  --elev-float: 0 16px 48px -16px rgb(28 23 20 / 0.30), 0 2px 8px rgb(28 23 20 / 0.06);
+  --elev-glow: 0 10px 28px -10px rgb(180 35 44 / 0.55);
+
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+
+  --chart-1: var(--primary);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: var(--grape);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #110F0D;
+  --surface: #1A1714;
+  --surface-2: #231F1B;
+  --surface-3: #2E2924;
+  --ink: #F5EFE7;
+  --ink-2: #C2B7AB;
+  --ink-3: #948A7F;
+  --line: #2F2A25;
+  --line-strong: #433C35;
+  --night: #2A221D;
+  --on-night: #F7F3ED;
+
+  --primary: #D93B44;
+  --primary-hover: #C5323B;
+  --primary-soft: #3A2020;
+  --primary-ink: #FF9A9F;
+  --gold: #EDBE52;
+  --gold-soft: #3A2F16;
+  --gold-ink: #F3CF7A;
+
+  --success: #3CC48A;  --success-soft: #15291F;
+  --warning: #F0A93A;  --warning-soft: #33260F;
+  --danger: #F06A6A;   --danger-soft: #361A1A;
+  --info: #6D9BFF;     --info-soft: #172440;
+  --on-solid: #12100E;
+
+  --sky: #6AA3FF;   --sky-soft: #16233B;
+  --mint: #3CD3A2;  --mint-soft: #12291F;
+  --sun: #FFBD3D;   --sun-soft: #35280C;
+  --grape: #A08BFF; --grape-soft: #231D3D;
+  --coral: #FF8A7A; --coral-soft: #3A1E1A;
+  --rose: #FF86B5;  --rose-soft: #3A1A28;
+
+  --elev-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+  --elev-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -10px rgb(0 0 0 / 0.6);
+  --elev-float: 0 16px 48px -12px rgb(0 0 0 / 0.75);
+  --elev-glow: 0 10px 28px -10px rgb(217 59 68 / 0.6);
+}
+
+[data-role="GLV"]     { --control: 3rem; }
+[data-role="PARENT"]  { --control: 3.5rem; --control-sm: 2.75rem; --control-lg: 3.75rem; }
+[data-role="STUDENT"] { --control: 3.5rem; --control-sm: 2.75rem; --control-lg: 3.75rem;
+                        --r-control: 1rem; --r-card: 1.5rem; --r-card-lg: 2rem; }
+
+html[data-text-size="md"] { font-size: 100%; }
+html[data-text-size="lg"] { font-size: 112.5%; }
+html[data-text-size="xl"] { font-size: 125%; }
 ```
 
-## 26. Data Visualization
-
-```css
-:root {
-  --chart-1: var(--color-primary);
-  --chart-2: var(--color-info);
-  --chart-3: var(--color-success);
-  --chart-4: var(--color-warning);
-  --chart-5: var(--game-purple);
-
-  --chart-grid: var(--color-neutral-200);
-  --chart-label: var(--color-neutral-600);
-  --chart-axis: var(--color-neutral-300);
-}
-```
-
-Tối đa 5 màu chính trong một chart; đỏ trong chart mang nghĩa cảnh báo/âm tính khi phù hợp.
-
-## 27. Accessibility Rules
-
-1. Không dùng màu làm tín hiệu duy nhất.
-2. Focus state luôn nhìn thấy bằng keyboard.
-3. Icon button có accessible label.
-4. Error message gắn với field.
-5. Text chính có contrast cao.
-6. Button nghiệp vụ quan trọng không chỉ có icon.
-7. Form input có label rõ ràng.
-
-## 28. Complete Token Source
-
-```css
-:root {
-  --color-primary-50: #FFF1F2;
-  --color-primary-100: #FFE4E6;
-  --color-primary-200: #FECDD3;
-  --color-primary-300: #FDA4AF;
-  --color-primary-400: #FB7185;
-  --color-primary-500: #D64550;
-  --color-primary-600: #B4232C;
-  --color-primary-700: #941D25;
-  --color-primary-800: #7A1A21;
-  --color-primary-900: #641A1E;
-
-  --color-gold-50: #FFFBEB;
-  --color-gold-100: #FEF3C7;
-  --color-gold-200: #FDE68A;
-  --color-gold-300: #FCD34D;
-  --color-gold-400: #F4C95D;
-  --color-gold-500: #E3B341;
-  --color-gold-600: #C99526;
-  --color-gold-700: #A87917;
-  --color-gold-800: #8B6419;
-
-  --color-neutral-0: #FFFFFF;
-  --color-neutral-50: #FAFAF9;
-  --color-neutral-100: #F5F5F4;
-  --color-neutral-200: #E7E5E4;
-  --color-neutral-300: #D6D3D1;
-  --color-neutral-400: #A8A29E;
-  --color-neutral-500: #78716C;
-  --color-neutral-600: #57534E;
-  --color-neutral-700: #44403C;
-  --color-neutral-800: #292524;
-  --color-neutral-900: #1C1917;
-
-  --color-success-50: #ECFDF3;
-  --color-success-100: #D1FAE5;
-  --color-success-500: #22A06B;
-  --color-success-600: #168154;
-  --color-success-700: #146C47;
-
-  --color-error-50: #FEF2F2;
-  --color-error-100: #FEE2E2;
-  --color-error-500: #DC4C4C;
-  --color-error-600: #C73A3A;
-  --color-error-700: #A52D2D;
-
-  --color-warning-50: #FFF8E7;
-  --color-warning-100: #FEF0C7;
-  --color-warning-500: #D9901A;
-  --color-warning-600: #B86F08;
-  --color-warning-700: #925A0A;
-
-  --color-info-50: #EFF6FF;
-  --color-info-100: #DBEAFE;
-  --color-info-500: #3B82F6;
-  --color-info-600: #2563EB;
-  --color-info-700: #1D4ED8;
-
-  --game-purple: #7C5CFC;
-  --game-blue: #3B82F6;
-  --game-cyan: #18B7C9;
-  --game-orange: #F28C28;
-  --game-gold: #E3B341;
-  --game-pink: #E86A92;
-
-  --color-bg-page: var(--color-neutral-50);
-  --color-bg-surface: var(--color-neutral-0);
-  --color-bg-muted: var(--color-neutral-100);
-
-  --color-text-primary: var(--color-neutral-800);
-  --color-text-secondary: var(--color-neutral-600);
-  --color-text-muted: var(--color-neutral-400);
-  --color-text-inverse: var(--color-neutral-0);
-
-  --color-border-default: var(--color-neutral-200);
-  --color-border-strong: var(--color-neutral-300);
-
-  --color-primary: var(--color-primary-600);
-  --color-primary-hover: var(--color-primary-700);
-  --color-primary-active: var(--color-primary-800);
-  --color-primary-soft: var(--color-primary-50);
-
-  --color-accent: var(--color-gold-500);
-  --color-accent-soft: var(--color-gold-50);
-
-  --color-success: var(--color-success-600);
-  --color-success-soft: var(--color-success-50);
-
-  --color-warning: var(--color-warning-600);
-  --color-warning-soft: var(--color-warning-50);
-
-  --color-error: var(--color-error-600);
-  --color-error-soft: var(--color-error-50);
-
-  --color-info: var(--color-info-600);
-  --color-info-soft: var(--color-info-50);
-
-  --font-family-heading: "Noto Serif", "Source Serif 4", Georgia, serif;
-  --font-family-body: "Inter", "Noto Sans", "Segoe UI", sans-serif;
-
-  --font-size-display-xl: 40px;
-  --font-size-display-lg: 32px;
-  --font-size-heading-xl: 28px;
-  --font-size-heading-lg: 24px;
-  --font-size-heading-md: 20px;
-  --font-size-heading-sm: 18px;
-  --font-size-body-lg: 18px;
-  --font-size-body-md: 16px;
-  --font-size-body-sm: 14px;
-  --font-size-caption: 12px;
-  --font-size-button-lg: 16px;
-  --font-size-button-md: 15px;
-  --font-size-button-sm: 14px;
-  --font-size-input-md: 16px;
-
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  --line-height-tight: 1.15;
-  --line-height-heading: 1.3;
-  --line-height-body: 1.5;
-  --line-height-relaxed: 1.6;
-
-  --space-0: 0px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --space-20: 80px;
-
-  --radius-none: 0px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 24px;
-  --radius-full: 9999px;
-
-  --shadow-xs: 0 1px 2px rgba(28,25,23,.05);
-  --shadow-sm: 0 2px 6px rgba(28,25,23,.07);
-  --shadow-md: 0 6px 16px rgba(28,25,23,.08);
-  --shadow-lg: 0 12px 28px rgba(28,25,23,.10);
-  --shadow-xl: 0 18px 40px rgba(28,25,23,.12);
-
-  --icon-xs: 14px;
-  --icon-sm: 16px;
-  --icon-md: 20px;
-  --icon-lg: 24px;
-  --icon-xl: 32px;
-  --icon-2xl: 40px;
-  --icon-3xl: 48px;
-
-  --touch-target-min: 44px;
-  --touch-target-comfortable: 48px;
-  --touch-target-large: 52px;
-  --touch-target-parent: 56px;
-
-  --button-height-sm: 36px;
-  --button-height-md: 44px;
-  --button-height-lg: 52px;
-  --button-height-parent: 56px;
-  --button-radius: 10px;
-  --button-font-weight: 600;
-
-  --input-height-sm: 40px;
-  --input-height-md: 48px;
-  --input-height-lg: 52px;
-  --input-height-parent: 56px;
-  --input-padding-x: 16px;
-  --input-radius: 10px;
-  --input-font-size: 16px;
-  --input-line-height: 1.4;
-
-  --container-mobile: 100%;
-  --container-tablet: 768px;
-  --container-desktop: 1200px;
-  --container-wide: 1440px;
-
-  --page-padding-mobile: 16px;
-  --page-padding-tablet: 24px;
-  --page-padding-desktop: 32px;
-
-  --breakpoint-sm: 480px;
-  --breakpoint-md: 768px;
-  --breakpoint-lg: 1024px;
-  --breakpoint-xl: 1280px;
-  --breakpoint-2xl: 1440px;
-
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
-
-  --focus-ring-width: 3px;
-  --focus-ring-offset: 2px;
-  --focus-ring-color: rgba(180, 35, 44, 0.22);
-
-  --z-base: 0;
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-header: 300;
-  --z-overlay: 400;
-  --z-modal: 500;
-  --z-popover: 600;
-  --z-toast: 700;
-  --z-tooltip: 800;
-}
-```
-
-## 29. Frontend Rules
+## 17. Frontend Rules v2
 
 ```text
 RULE-001 Mobile-first.
-RULE-002 Không hard-code màu nếu token tương ứng tồn tại.
-RULE-003 Không hard-code spacing ngoài hệ thống 4px.
-RULE-004 Không dùng đỏ brand làm background toàn màn hình.
-RULE-005 Primary action = Red; Achievement/Highlight = Gold.
-RULE-006 Error = Red; Success = Green; Warning = Amber; Info = Blue.
-RULE-007 Heading = Serif; Body/UI = Sans-serif.
-RULE-008 Interactive element >= 44px.
-RULE-009 Input mobile >= 48px.
-RULE-010 Parent font >= 18px, control >= 52px.
-RULE-011 Icon family thống nhất.
-RULE-012 Không icon-only action quan trọng cho Parent.
-RULE-013 Focus state luôn visible.
-RULE-014 Không phụ thuộc màu duy nhất để biểu diễn state.
-RULE-015 Gamification chỉ tăng visual richness ở Student area.
+RULE-002 Chỉ dùng semantic token utility; cấm hex và palette mặc định Tailwind.
+RULE-003 Chỉ dùng thang spacing/type rem; cấm px tùy ý (trừ border 1px, outline).
+RULE-004 Không dùng đỏ brand làm nền toàn màn hình (khối night được phép).
+RULE-005 Primary action = primary (đỏ); Thành tích = gold.
+RULE-006 Error = danger; Success = success; Warning = warning; Info = info.
+RULE-007 Font: Geist (UI/heading), Geist Mono (số), Fraunces italic (trích dẫn). Cấm Inter, cấm font-serif.
+RULE-008 Vùng chạm ≥ 44px; Phụ huynh/Học sinh ≥ 52px.
+RULE-009 Input ≥ 48px và ≥ text-base.
+RULE-010 Phụ huynh mặc định cỡ chữ Lớn; không text-xs trong khu Phụ huynh.
+RULE-011 Chỉ Lucide icon.
+RULE-012 Không icon-only cho thao tác quan trọng của Phụ huynh/Học sinh.
+RULE-013 Focus-visible luôn thấy.
+RULE-014 Không chỉ dùng màu để biểu diễn trạng thái (icon + chữ).
+RULE-015 Kid palette chỉ ở khu Học sinh, landing, minh họa.
+RULE-016 Mọi component phải đẹp ở cả Light và Dark.
+RULE-017 Không emoji; không meta-label kiểu "SECTION 01".
+RULE-018 Animation đi qua lib/motion, tôn trọng reduced-motion.
 ```
 
-## 30. Summary
+## 18. Summary
 
 ```text
-Primary Red  #B4232C
-Brand Gold   #E3B341
-Surface      #FFFFFF / #FAFAF9
-Text         #292524
+Primary      #B4232C (dark #D93B44)
+Gold         #E3B341
+Canvas       #F7F3ED (dark #110F0D)
+Ink          #1C1714 (dark #F5EFE7)
 
-Heading      Noto Serif
-Body         Inter
-Base         16px
-Parent       18px
+Font         Geist / Geist Mono / Fraunces italic (accent)
+Base         16px — người dùng chọn 16 / 18 / 20
+Parent       mặc định 18px
 
-Spacing      4px base
-Button       44–52px
-Parent       56px
-Input        48–52px
-Card         14px
-Modal        18px
-
-Mobile-first
-Touch-first
-Fast-input
-High-contrast
-Accessible
-Role-based density
+Button       pill, 44–56px theo vai trò
+Input        rounded 14px, ≥ 48px
+Card         rounded 20px (Học sinh 24px)
+Theme        Light / Dark
+Motion       GSAP, reduced-motion safe
 ```

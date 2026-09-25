@@ -11,10 +11,8 @@ export interface TeacherScoresPageProps {
 }
 
 /**
- * TeacherScoresPage (/teacher/scores)
- *
- * Màn hình Nhập điểm dành cho Giáo lý viên.
- * Sử dụng BulkScoreEntry (§30 - Feature Component Tree).
+ * TeacherScoresPage (/teacher/scores) — màn hình Nhập điểm của Giáo lý viên.
+ * Toàn bộ luồng (chọn bảng điểm, nhập nhanh, nháp, Excel, lưu) nằm trong BulkScoreEntry.
  */
 export const TeacherScoresPage: React.FC<TeacherScoresPageProps> = (props) => {
   return <BulkScoreEntry {...props} />;

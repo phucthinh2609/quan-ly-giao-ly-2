@@ -1,68 +1,65 @@
 import React from "react";
 import { Skeleton } from "./Skeleton";
 import { EmptyState } from "./EmptyState";
+import { cn } from "../../lib/cn";
 
 export interface ColumnDef<T> {
   key: string;
   header: React.ReactNode;
-  /**
-   * Hàm trích xuất giá trị hoặc custom render cell
-   */
+  /** Trích xuất giá trị hoặc render cell tùy biến */
   accessor?: (item: T, index: number) => React.ReactNode;
   align?: "left" | "center" | "right";
   width?: string;
   className?: string;
-  /**
-   * Ẩn cột này trên giao diện card mobile nếu cần
-   */
+  /** Ẩn cột này trên thẻ mobile */
   hideOnMobileCard?: boolean;
 }
 
 export interface DataTableProps<T> {
-  /**
-   * Mảng dữ liệu nguồn
-   */
+  /** Dữ liệu nguồn */
   data: T[];
-  /**
-   * Cấu hình các cột của bảng
-   */
+  /** Cấu hình cột */
   columns: ColumnDef<T>[];
-  /**
-   * Hàm lấy ID duy nhất của mỗi dòng
-   */
+  /** Lấy khóa duy nhất cho mỗi dòng */
   keyExtractor: (item: T, index: number) => string | number;
-  /**
-   * Trạng thái đang tải dữ liệu (ưu tiên Skeleton)
-   */
+  /** Đang tải (Skeleton) */
   loading?: boolean;
-  /**
-   * Số lượng dòng Skeleton giả lập khi đang tải (mặc định: 5)
-   */
+  /** Số dòng Skeleton khi đang tải (mặc định 5) */
   loadingRowsCount?: number;
-  /**
-   * Giao diện hiển thị khi dữ liệu rỗng
-   */
+  /** Giao diện khi rỗng */
   emptyState?: React.ReactNode;
-  /**
-   * Callback khi người dùng nhấn vào một dòng
-   */
+  /** Nhấn vào một dòng */
   onRowClick?: (item: T, index: number) => void;
   /**
-   * Chế độ hiển thị trên thiết bị di động (<768px):
-   * 'card' (chuyển đổi thành thẻ) hoặc 'scroll' (cuộn ngang)
+   * Chế độ trên mobile (< 768px): 'card' (danh sách thẻ) hoặc 'scroll' (cuộn ngang)
    */
   mobileViewMode?: "card" | "scroll";
-  /**
-   * Tùy biến toàn bộ giao diện thẻ mobile (nếu mobileViewMode = 'card')
-   */
+  /** Tùy biến toàn bộ thẻ mobile (khi mobileViewMode = 'card') */
   renderMobileCard?: (item: T, index: number) => React.ReactNode;
   className?: string;
+  /**
+   * Giới hạn chiều cao vùng bảng (VD "max-h-[70dvh]") để cuộn dọc bên trong với header dính.
+   * Không truyền: bảng cao theo nội dung.
+   */
+  maxHeight?: string;
+  /** Chú thích bảng cho trình đọc màn hình */
+  caption?: string;
+}
+
+const alignClasses = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+
+function getCellValue<T>(col: ColumnDef<T>, item: T, index: number): React.ReactNode {
+  return col.accessor ? col.accessor(item, index) : ((item as Record<string, unknown>)[col.key] as React.ReactNode);
 }
 
 /**
- * DataTable Component (§17, §20 - 03_Component_Library & Responsive Matrix)
- * - Desktop/Tablet (≥768px): Hiển thị dạng bảng (Table) hoàn chỉnh.
- * - Mobile (<768px): Chuyển đổi linh hoạt sang Card dạng danh sách hoặc Horizontal Scroll.
+ * DataTable (03 §5, 04 §20)
+ * - >= md: bảng với header dính (bg-surface-2), hàng hover, đường chia border-line.
+ * - < md: danh sách thẻ (mặc định) hoặc cuộn ngang.
  */
 export function DataTable<T>({
   data,
@@ -75,21 +72,25 @@ export function DataTable<T>({
   mobileViewMode = "card",
   renderMobileCard,
   className = "",
+  maxHeight,
+  caption,
 }: DataTableProps<T>): React.ReactElement {
-  // Trạng thái Loading: Hiển thị Skeleton Rows
   if (loading) {
     return (
-      <div className={`bg-white rounded-[14px] border border-[#E7E5E4] overflow-hidden ${className}`}>
-        <div className="p-4 space-y-3">
-          <div className="flex gap-4 pb-3 border-b border-[#E7E5E4]">
-            {columns.map((col, idx) => (
-              <Skeleton key={idx} width={col.width || "20%"} height={20} />
-            ))}
-          </div>
+      <div
+        aria-busy="true"
+        className={cn("overflow-hidden rounded-card border border-line bg-surface shadow-card", className)}
+      >
+        <div className="flex gap-4 border-b border-line bg-surface-2 px-4 py-3.5">
+          {columns.map((col, idx) => (
+            <Skeleton key={idx} width={col.width || "20%"} height={14} />
+          ))}
+        </div>
+        <div className="divide-y divide-line">
           {Array.from({ length: loadingRowsCount }).map((_, rIdx) => (
-            <div key={rIdx} className="flex gap-4 py-2 border-b border-[#F5F5F4] last:border-none">
+            <div key={rIdx} className="flex gap-4 px-4 py-4">
               {columns.map((col, cIdx) => (
-                <Skeleton key={cIdx} width={col.width || "20%"} height={24} />
+                <Skeleton key={cIdx} width={col.width || "20%"} height={18} />
               ))}
             </div>
           ))}
@@ -98,115 +99,102 @@ export function DataTable<T>({
     );
   }
 
-  // Trạng thái Dữ liệu rỗng (Empty)
   if (!data || data.length === 0) {
     return (
       <div className={className}>
         {emptyState || (
           <EmptyState
             title="Chưa có dữ liệu"
-            description="Hiện không tìm thấy bản ghi nào phù hợp với bộ lọc hiện tại."
+            description="Không tìm thấy bản ghi nào phù hợp với bộ lọc hiện tại."
           />
         )}
       </div>
     );
   }
 
-  const alignClasses = {
-    left: "text-left",
-    center: "text-center",
-    right: "text-right",
+  const isClickable = Boolean(onRowClick);
+
+  const handleRowKeyDown = (event: React.KeyboardEvent<HTMLElement>, item: T, index: number) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onRowClick?.(item, index);
+    }
   };
 
   return (
-    <div className={`w-full ${className}`}>
-      {/* 1. DESKTOP & TABLET VIEW (≥768px) - Chuẩn Semantic Table */}
-      <div className="hidden md:block bg-white rounded-[14px] border border-[#E7E5E4] overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse font-sans">
+    <div className={cn("w-full", className)}>
+      {/* >= md: bảng */}
+      <div className="hidden overflow-hidden rounded-card border border-line bg-surface shadow-card md:block">
+        <div className={cn("overflow-x-auto", maxHeight && cn("overflow-y-auto overscroll-contain", maxHeight))}>
+          <table className="w-full border-collapse text-left">
+            {caption && <caption className="sr-only">{caption}</caption>}
             <thead>
-              <tr className="bg-[#FAFAF9] border-b border-[#E7E5E4] text-[13px] font-semibold text-[#57534E] uppercase tracking-wider">
+              <tr>
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     scope="col"
                     style={{ width: col.width }}
-                    className={`py-3.5 px-4 ${alignClasses[col.align || "left"]} ${col.className || ""}`}
+                    className={cn(
+                      "sticky top-0 z-10 border-b border-line bg-surface-2 px-4 py-3 text-sm font-semibold whitespace-nowrap text-ink-2",
+                      alignClasses[col.align || "left"],
+                      col.className
+                    )}
                   >
                     {col.header}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#F5F5F4] text-[14px] sm:text-[15px] text-[#292524]">
-              {data.map((item, rowIndex) => {
-                const key = keyExtractor(item, rowIndex);
-                const isClickable = Boolean(onRowClick);
-
-                return (
-                  <tr
-                    key={key}
-                    onClick={isClickable ? () => onRowClick?.(item, rowIndex) : undefined}
-                    tabIndex={isClickable ? 0 : undefined}
-                    onKeyDown={
-                      isClickable
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              onRowClick?.(item, rowIndex);
-                            }
-                          }
-                        : undefined
-                    }
-                    className={`
-                      transition-colors duration-100
-                      ${isClickable ? "cursor-pointer hover:bg-[#FAFAF9] active:bg-[#F5F5F4] focus-visible:ring-2 focus-visible:ring-[#B4232C]/30 outline-none" : "hover:bg-[#FAFAF9]/60"}
-                    `}
-                  >
-                    {columns.map((col) => {
-                      const cellValue = col.accessor
-                        ? col.accessor(item, rowIndex)
-                        : (item as Record<string, unknown>)[col.key] as React.ReactNode;
-
-                      return (
-                        <td
-                          key={col.key}
-                          className={`py-3.5 px-4 align-middle ${alignClasses[col.align || "left"]} ${col.className || ""}`}
-                        >
-                          {cellValue}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
+            <tbody className="divide-y divide-line text-sm text-ink">
+              {data.map((item, rowIndex) => (
+                <tr
+                  key={keyExtractor(item, rowIndex)}
+                  onClick={isClickable ? () => onRowClick?.(item, rowIndex) : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  onKeyDown={isClickable ? (e) => handleRowKeyDown(e, item, rowIndex) : undefined}
+                  className={cn(
+                    "transition-colors duration-100 hover:bg-surface-2/60",
+                    isClickable &&
+                      "cursor-pointer outline-none active:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-primary/50"
+                  )}
+                >
+                  {columns.map((col) => (
+                    <td
+                      key={col.key}
+                      className={cn("px-4 py-3.5 align-middle", alignClasses[col.align || "left"], col.className)}
+                    >
+                      {getCellValue(col, item, rowIndex)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* 2. MOBILE VIEW (<768px) */}
+      {/* < md */}
       <div className="block md:hidden">
         {mobileViewMode === "card" ? (
-          /* Mobile Card View (Mặc định cho trải nghiệm mượt mà, không bị tràn ngang) */
           <div className="space-y-3">
             {data.map((item, index) => {
               const key = keyExtractor(item, index);
-              const isClickable = Boolean(onRowClick);
 
               if (renderMobileCard) {
                 return (
                   <div
                     key={key}
-                    onClick={() => onRowClick?.(item, index)}
-                    className={isClickable ? "cursor-pointer" : ""}
+                    onClick={isClickable ? () => onRowClick?.(item, index) : undefined}
+                    className={isClickable ? "cursor-pointer" : undefined}
                   >
                     {renderMobileCard(item, index)}
                   </div>
                 );
               }
 
-              // Fallback thẻ tự động theo columns
+              // Thẻ tự động theo columns: cột đầu làm tiêu đề, các cột còn lại dạng lưới
               const primaryCol = columns[0];
               const otherCols = columns.slice(1).filter((c) => !c.hideOnMobileCard);
 
@@ -216,71 +204,63 @@ export function DataTable<T>({
                   onClick={isClickable ? () => onRowClick?.(item, index) : undefined}
                   role={isClickable ? "button" : undefined}
                   tabIndex={isClickable ? 0 : undefined}
-                  onKeyDown={
-                    isClickable
-                      ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onRowClick?.(item, index);
-                          }
-                        }
-                      : undefined
-                  }
-                  className={`
-                    bg-white p-4 rounded-[12px] border border-[#E7E5E4] shadow-xs space-y-2.5 transition-colors
-                    ${isClickable ? "active:scale-[0.99] active:bg-[#FAFAF9] cursor-pointer focus-visible:ring-2 focus-visible:ring-[#B4232C]/30 outline-none" : ""}
-                  `}
+                  onKeyDown={isClickable ? (e) => handleRowKeyDown(e, item, index) : undefined}
+                  className={cn(
+                    "rounded-card border border-line bg-surface p-4 shadow-xs",
+                    isClickable &&
+                      "cursor-pointer transition-[transform,background-color] duration-150 ease-out-soft active:scale-[0.99] active:bg-surface-2 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50"
+                  )}
                 >
-                  {/* Dòng chính đầu tiên */}
                   {primaryCol && (
-                    <div className="flex items-center justify-between font-semibold text-[15px] text-[#1C1917] pb-2 border-b border-[#F5F5F4]">
-                      <span className="text-[#78716C] text-[13px] font-normal">{primaryCol.header}:</span>
-                      <span>
-                        {primaryCol.accessor
-                          ? primaryCol.accessor(item, index)
-                          : (item as Record<string, unknown>)[primaryCol.key] as React.ReactNode}
-                      </span>
+                    <div className="border-b border-line pb-3">
+                      <span className="sr-only">{primaryCol.header}: </span>
+                      <div className="text-base font-semibold text-ink">{getCellValue(primaryCol, item, index)}</div>
                     </div>
                   )}
 
-                  {/* Các thuộc tính còn lại */}
-                  <div className="grid grid-cols-2 gap-2 text-[13px]">
-                    {otherCols.map((col) => (
-                      <div key={col.key} className="flex flex-col">
-                        <span className="text-[#78716C] text-[12px]">{col.header}</span>
-                        <span className="font-medium text-[#292524] mt-0.5">
-                          {col.accessor
-                            ? col.accessor(item, index)
-                            : (item as Record<string, unknown>)[col.key] as React.ReactNode}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {otherCols.length > 0 && (
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 pt-3">
+                      {otherCols.map((col) => (
+                        <div key={col.key} className="flex min-w-0 flex-col">
+                          <dt className="text-sm text-ink-3">{col.header}</dt>
+                          <dd className="mt-0.5 text-sm font-medium break-words text-ink">
+                            {getCellValue(col, item, index)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
                 </div>
               );
             })}
           </div>
         ) : (
-          /* Mobile Horizontal Scroll View */
-          <div className="bg-white rounded-[12px] border border-[#E7E5E4] overflow-x-auto shadow-xs">
-            <table className="w-full text-left border-collapse min-w-[500px]">
+          <div className="overflow-x-auto rounded-card border border-line bg-surface shadow-xs">
+            <table className="w-full min-w-lg border-collapse text-left">
+              {caption && <caption className="sr-only">{caption}</caption>}
               <thead>
-                <tr className="bg-[#FAFAF9] border-b border-[#E7E5E4] text-[12px] font-semibold text-[#57534E] uppercase">
+                <tr className="border-b border-line bg-surface-2">
                   {columns.map((col) => (
-                    <th key={col.key} className="py-2.5 px-3">
+                    <th
+                      key={col.key}
+                      scope="col"
+                      className="px-3 py-2.5 text-sm font-semibold whitespace-nowrap text-ink-2"
+                    >
                       {col.header}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F5F5F4] text-[13px]">
+              <tbody className="divide-y divide-line text-sm text-ink">
                 {data.map((item, rowIndex) => (
-                  <tr key={keyExtractor(item, rowIndex)} className="hover:bg-[#FAFAF9]">
+                  <tr
+                    key={keyExtractor(item, rowIndex)}
+                    onClick={isClickable ? () => onRowClick?.(item, rowIndex) : undefined}
+                    className={cn("hover:bg-surface-2/60", isClickable && "cursor-pointer active:bg-surface-2")}
+                  >
                     {columns.map((col) => (
-                      <td key={col.key} className="py-2.5 px-3 whitespace-nowrap">
-                        {col.accessor
-                          ? col.accessor(item, rowIndex)
-                          : (item as Record<string, unknown>)[col.key] as React.ReactNode}
+                      <td key={col.key} className="px-3 py-3 whitespace-nowrap">
+                        {getCellValue(col, item, rowIndex)}
                       </td>
                     ))}
                   </tr>

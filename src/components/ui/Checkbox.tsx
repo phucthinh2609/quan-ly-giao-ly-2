@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useId } from "react";
-import { Check, Minus } from "lucide-react";
+import { AlertCircle, Check, Minus } from "lucide-react";
+import { cn } from "../../lib/cn";
 
 export interface CheckboxProps {
   checked?: boolean;
@@ -12,8 +13,14 @@ export interface CheckboxProps {
   name?: string;
   className?: string;
   onChange: (checked: boolean) => void;
+  /** Nhãn cho trình đọc màn hình khi không có label hiển thị (VD ô chọn trong bảng) */
+  ariaLabel?: string;
 }
 
+/**
+ * Checkbox (03 §4.4): hộp size-5 bo rounded-xs, checked nền primary.
+ * Cả dòng nhãn là vùng chạm >= 44px.
+ */
 export const Checkbox: React.FC<CheckboxProps> = ({
   checked = false,
   indeterminate = false,
@@ -25,12 +32,14 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   name,
   className = "",
   onChange,
+  ariaLabel,
 }) => {
   const generatedId = useId();
   const checkboxId = id || generatedId;
+  const errorId = `${checkboxId}-error`;
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync indeterminate property on real DOM input
+  // Đồng bộ thuộc tính indeterminate trên input thật
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.indeterminate = Boolean(indeterminate && !checked);
@@ -39,6 +48,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
 
   const isChecked = checked && !indeterminate;
   const isIndeterminate = indeterminate && !checked;
+  const isOn = isChecked || isIndeterminate;
   const hasError = Boolean(error);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,15 +57,15 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   };
 
   return (
-    <div className={`inline-flex flex-col font-sans ${className}`}>
+    <div className={cn("inline-flex flex-col", className)}>
       <label
         htmlFor={checkboxId}
-        className={`
-          inline-flex items-start gap-3 select-none min-h-[44px] py-1 cursor-pointer
-          ${disabled ? "cursor-not-allowed opacity-60" : ""}
-        `}
+        className={cn(
+          "group inline-flex min-h-11 items-start gap-3 py-2.5 select-none",
+          !label && !description && "min-w-11 justify-center",
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+        )}
       >
-        {/* Hidden Native Checkbox */}
         <input
           ref={inputRef}
           id={checkboxId}
@@ -64,62 +74,55 @@ export const Checkbox: React.FC<CheckboxProps> = ({
           checked={isChecked}
           disabled={disabled}
           onChange={handleChange}
-          className="sr-only peer"
+          aria-label={label ? undefined : ariaLabel}
+          aria-invalid={hasError || undefined}
+          aria-describedby={hasError ? errorId : undefined}
+          className="peer sr-only"
         />
 
-        {/* Custom Visual Box with Touch Target Container */}
-        <div className="relative flex items-center justify-center shrink-0 w-6 h-6 mt-0.5">
-          <div
-            className={`
-              w-5 h-5 rounded-[6px] transition-colors duration-150 flex items-center justify-center
-              border text-white
-              ${
-                isChecked || isIndeterminate
-                  ? "bg-[#B4232C] border-[#B4232C]"
-                  : "bg-white border-[#D6D3D1] hover:border-[#A8A29E]"
-              }
-              ${hasError ? "border-[#DC4C4C]" : ""}
-              ${
-                disabled
-                  ? "bg-[#F5F5F4] border-[#E7E5E4] text-[#A8A29E]"
-                  : "peer-focus-visible:ring-3 peer-focus-visible:ring-[#B4232C]/25"
-              }
-            `}
-          >
-            {isChecked && (
-              <Check className="w-3.5 h-3.5 stroke-[3] animate-in zoom-in-75 duration-100" />
-            )}
-            {isIndeterminate && (
-              <Minus className="w-3.5 h-3.5 stroke-[3] animate-in zoom-in-75 duration-100" />
-            )}
-          </div>
-        </div>
+        {/* Hộp hiển thị (sibling ngay sau input để nhận peer-focus-visible) */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-xs border-2 text-on-primary",
+            "transition-[background-color,border-color,box-shadow] duration-150 ease-out-soft",
+            "peer-focus-visible:ring-4 peer-focus-visible:ring-primary/25",
+            isOn
+              ? "border-primary bg-primary"
+              : cn("bg-surface", hasError ? "border-danger" : "border-ink-3", !disabled && "group-hover:border-ink-2"),
+            disabled && !isOn && "border-line-strong bg-surface-2"
+          )}
+        >
+          {isIndeterminate ? (
+            <Minus className="size-3.5" strokeWidth={3} />
+          ) : (
+            <Check
+              className={cn(
+                "size-3.5 transition-transform duration-150 ease-spring",
+                isChecked ? "scale-100" : "scale-0"
+              )}
+              strokeWidth={3}
+            />
+          )}
+        </span>
 
-        {/* Label & Description */}
         {(label || description) && (
-          <div className="flex flex-col">
+          <span className="flex min-w-0 flex-col">
             {label && (
-              <span
-                className={`text-[15px] font-medium leading-snug ${
-                  disabled ? "text-[#A8A29E]" : "text-[#292524]"
-                }`}
-              >
+              <span className={cn("text-base font-medium leading-snug", disabled ? "text-ink-3" : "text-ink")}>
                 {label}
               </span>
             )}
-            {description && (
-              <span className="text-[13px] text-[#78716C] mt-0.5 leading-normal">
-                {description}
-              </span>
-            )}
-          </div>
+            {description && <span className="mt-0.5 text-sm leading-normal text-ink-3">{description}</span>}
+          </span>
         )}
       </label>
 
       {hasError && (
-        <span role="alert" className="text-[12px] font-medium text-[#DC4C4C] mt-0.5 ml-9">
-          {error}
-        </span>
+        <p id={errorId} role="alert" className="-mt-1 ml-8 flex items-start gap-1.5 text-sm font-medium text-danger">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
+        </p>
       )}
     </div>
   );
