@@ -1,24 +1,25 @@
-import React, { useState } from "react";
-import { PageHeader } from "../../components/ui/PageHeader";
-import { Badge } from "../../components/ui/Badge";
-import {
-  ParentChildSwitcher,
-  WelcomeSummary,
-  ParentGradeOverview,
-  AttendanceSummaryCard,
-} from "../../components/parent";
-import {
-  NotificationPreview,
-  NotificationList,
-} from "../../components/notification";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronRight, Trophy } from "lucide-react";
+import { ParentChildSwitcher } from "../../components/parent/ParentChildSwitcher";
+import { WelcomeSummary } from "../../components/parent/WelcomeSummary";
+import { ShortcutGrid } from "../../components/parent/ShortcutGrid";
+import { ParentGradeOverview } from "../../components/parent/ParentGradeOverview";
+import { AcademicPeriodSelector } from "../../components/parent/AcademicPeriodSelector";
+import { AttendanceSummaryCard } from "../../components/parent/AttendanceSummaryCard";
+import { AttendanceHistoryList } from "../../components/parent/AttendanceHistoryList";
+import { ChildAchievements } from "../../components/parent/ChildAchievements";
+import { deriveChildMilestones } from "../../components/parent/parentInsights";
+import { NotificationPreview } from "../../components/notification/NotificationPreview";
+import { NotificationList } from "../../components/notification/NotificationList";
+import { ErrorState } from "../../components/ui/ErrorState";
+import { IconTile } from "../../components/ui/IconTile";
 import { useParentContext } from "../../context/ParentContext";
 import { useAuth } from "../../context/AuthContext";
+import { cn } from "../../lib/cn";
+import { givenName } from "../../lib/format";
+import { useReveal } from "../../lib/motion";
+import { getChildCallName } from "../../services/parentMockData";
 import { User } from "../../types";
-import {
-  FileSpreadsheet,
-  RefreshCw,
-  ChevronLeft,
-} from "lucide-react";
 
 export interface ParentDashboardProps {
   onNavigate?: (path: string) => void;
@@ -28,35 +29,40 @@ export interface ParentDashboardProps {
   className?: string;
 }
 
+type ParentView = "home" | "scores" | "attendance" | "notifications" | "achievements";
+
+function resolveView(path: string): ParentView {
+  if (path.includes("scores")) return "scores";
+  if (path.includes("attendance")) return "attendance";
+  if (path.includes("notifications")) return "notifications";
+  if (path.includes("achievements")) return "achievements";
+  return "home";
+}
+
+/** Tiêu đề trong nội dung (header app ẩn tiêu đề cho tới khi cuộn). */
+const ViewHeading: React.FC<{ title: string; description?: React.ReactNode }> = ({ title, description }) => (
+  <header data-reveal-static className="space-y-1">
+    <h1 className="text-2xl font-bold tracking-tight text-balance text-ink sm:text-3xl">{title}</h1>
+    {description && <p className="text-base leading-relaxed text-ink-2">{description}</p>}
+  </header>
+);
+
 /**
- * ParentDashboard (Tier 5 Feature Component - §30, Wireframe C, Sitemap §5–6, §11)
+ * ParentDashboard (02 §6 §13, 04 §10–12) — khu Phụ huynh theo route:
+ * /dashboard · /parent/scores · /parent/attendance · /parent/notifications · /parent/achievements
  *
- * Exact Tree Hierarchy:
- * <ParentDashboard>
- * ├── <Header />
- * ├── <ParentChildSwitcher />
- * ├── <WelcomeSummary />
- * ├── <ParentGradeOverview />
- * ├── <AttendanceSummaryCard />
- * ├── <NotificationPreview />
- * └── <ParentBottomNav /> (MobileBottomNav)
- *
- * Ràng buộc:
- * - ParentChildSwitcher: đổi con → BẮT BUỘC refresh context dashboard/score/attendance/notification
- *   (gọi lại toàn bộ data fetch liên quan, không chỉ đổi label hiển thị).
- * - Toàn bộ control khu vực Parent: font-size ≥18px (body-lg), touch target ≥52–56px (RULE-010);
- *   KHÔNG dùng icon-only cho action nghiệp vụ quan trọng (RULE-012).
+ * Đổi con (chip) → ParentContext tải lại báo cáo + thông báo; trong lúc chờ hiển thị
+ * khung chờ đúng hình dạng, khi có dữ liệu thì nội dung xuất hiện lại theo nhịp.
  */
 export const ParentDashboard: React.FC<ParentDashboardProps> = ({
   onNavigate,
   currentPath = "/dashboard",
   user,
-  className = "",
+  className,
 }) => {
   const { user: authUser } = useAuth();
   const currentUser = user || authUser;
 
-  // Parent Context: holds real reactive state & async re-fetch on child switch
   const {
     linkedChildren,
     selectedChildId,
@@ -66,7 +72,10 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
     switchPeriod,
     report,
     isLoadingReport,
+    attendanceHistory,
+    teacherContact,
     notifications,
+    unreadCount,
     isLoadingNotifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
@@ -74,333 +83,225 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
     refreshAll,
   } = useParentContext();
 
-  // Active view tab within parent space: "dashboard" | "scores" | "attendance" | "notifications"
-  const getInitialTab = (): "dashboard" | "scores" | "attendance" | "notifications" => {
-    if (currentPath.includes("scores")) return "scores";
-    if (currentPath.includes("attendance")) return "attendance";
-    if (currentPath.includes("notifications")) return "notifications";
-    return "dashboard";
-  };
+  // Route hiện tại: theo prop từ router, vẫn chạy được khi không có onNavigate
+  const [localPath, setLocalPath] = useState(currentPath);
+  useEffect(() => {
+    setLocalPath(currentPath);
+  }, [currentPath]);
+  const view = resolveView(localPath);
 
-  const [activeParentTab, setActiveParentTab] = useState<
-    "dashboard" | "scores" | "attendance" | "notifications"
-  >(getInitialTab);
+  const navigate = useCallback(
+    (path: string) => {
+      setLocalPath(path);
+      onNavigate?.(path);
+    },
+    [onNavigate]
+  );
 
-  // Handle bottom nav / internal routing
-  const handleNav = (path: string) => {
-    if (path.includes("scores")) {
-      setActiveParentTab("scores");
-    } else if (path.includes("attendance")) {
-      setActiveParentTab("attendance");
-    } else if (path.includes("notifications")) {
-      setActiveParentTab("notifications");
-    } else {
-      setActiveParentTab("dashboard");
-    }
+  const callName = getChildCallName(selectedChild);
+  const reportReady = Boolean(report) && !isLoadingReport && !isRefreshing;
+  const notificationsReady = !isLoadingNotifications && !isRefreshing;
+  const reportFailed = !report && !isLoadingReport && !isRefreshing;
+  const ready =
+    view === "home" ? reportReady && notificationsReady : view === "notifications" ? notificationsReady : reportReady;
 
-    if (onNavigate) {
-      onNavigate(path);
-    }
-  };
+  const achievedCount = useMemo(
+    () => (report ? deriveChildMilestones(report).filter((m) => m.achieved).length : 0),
+    [report]
+  );
 
-  return (
-    <div className={`space-y-6 ${className}`}>
-      {/* =================================================================== */}
-      {/* 1. PAGE HEADER (In-content header replacing duplicate app Header)   */}
-      {/* =================================================================== */}
-      <PageHeader
-        title={
-          activeParentTab === "scores"
-            ? "Bảng điểm học sinh"
-            : activeParentTab === "attendance"
-            ? "Điểm danh & Chuyên cần"
-            : activeParentTab === "notifications"
-            ? "Thông báo Xứ đoàn"
-            : "Sổ Liên Lạc Điện Tử"
-        }
-        description={
-          activeParentTab === "scores"
-            ? `Bảng điểm chi tiết và nhận xét học tập của ${selectedChild.name}`
-            : activeParentTab === "attendance"
-            ? `Thống kê chuyên cần các buổi học Chúa Nhật của ${selectedChild.name}`
-            : activeParentTab === "notifications"
-            ? "Thông báo học vụ và sự kiện từ Xứ đoàn Kitô Vua"
-            : `Học sinh: ${selectedChild.christianName ? selectedChild.christianName + " " : ""}${selectedChild.name} · ${selectedChild.className}`
-        }
-        showBackButton={activeParentTab !== "dashboard"}
-        onBack={() => setActiveParentTab("dashboard")}
-        badge={<Badge variant="gold">{selectedChild.className}</Badge>}
-        actions={
-          <button
-            type="button"
-            disabled={isRefreshing}
-            onClick={() => refreshAll()}
-            aria-label="Làm mới dữ liệu"
-            title="Làm mới dữ liệu"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E7E5E4] bg-white text-[#57534E] hover:text-[#B4232C] hover:bg-[#FFF1F2] text-[13px] font-semibold transition-colors cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-[#B4232C]" : ""}`} />
-            <span className="hidden sm:inline">Làm mới</span>
-          </button>
-        }
+  // Nhịp xuất hiện: phần tĩnh chạy khi đổi màn; phần dữ liệu chạy lại khi đổi con / kỳ / có dữ liệu mới
+  const staticRef = useReveal<HTMLDivElement>({ selector: "[data-reveal-static]", deps: [view] });
+  const dataRef = useReveal<HTMLDivElement>({ deps: [view, selectedChildId, selectedPeriod, ready] });
+  const revealWhenReady = ready ? "" : undefined;
+
+  const switcher = (
+    <div data-reveal-static>
+      <ParentChildSwitcher
+        children={linkedChildren}
+        selectedChildId={selectedChildId}
+        onChange={switchChild}
+        isLoading={isRefreshing}
       />
+    </div>
+  );
 
-      {/* Main Content Area */}
-      <div className="space-y-6">
-        {/* ================================================================= */}
-        {/* VIEW 1: PARENT DASHBOARD (Default Home View)                       */}
-        {/* Exact Tree: ParentChildSwitcher -> WelcomeSummary ->              */}
-        {/*             ParentGradeOverview -> AttendanceSummaryCard ->       */}
-        {/*             NotificationPreview                                   */}
-        {/* ================================================================= */}
-        {activeParentTab === "dashboard" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Refreshing Banner Indicator */}
-            {isRefreshing && (
-              <div className="p-3 bg-[#FFF1F2] border border-[#FECDD3] rounded-[12px] flex items-center justify-center gap-2 text-[#B4232C] text-[14px] font-semibold animate-pulse">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Đang tải lại dữ liệu mới nhất cho {selectedChild.name}...</span>
-              </div>
+  const reportError = (
+    <ErrorState
+      title="Không thể tải dữ liệu của con"
+      message="Kiểm tra kết nối mạng rồi thử lại."
+      onRetry={() => {
+        void refreshAll();
+      }}
+    />
+  );
+
+  const renderHome = () => {
+    const firstName = givenName(currentUser?.name);
+    return (
+      <>
+        <div className="space-y-4">
+          <ViewHeading
+            title={firstName ? `Xin chào, ${firstName}` : "Xin chào"}
+            description="Cùng xem tình hình học tập của con."
+          />
+          {switcher}
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-12 lg:gap-8">
+          <div className="space-y-4 sm:space-y-5 lg:col-span-7">
+            {reportFailed ? (
+              reportError
+            ) : (
+              <WelcomeSummary selectedChild={selectedChild} report={report} isLoading={!ready} />
             )}
 
-            {/* 2. PARENT CHILD SWITCHER (Trigger re-fetch of all domains) */}
-            <section aria-label="Bộ chọn con">
-              <ParentChildSwitcher
-                children={linkedChildren}
-                selectedChildId={selectedChildId}
-                onChange={switchChild}
-                isLoading={isRefreshing}
+            <div data-reveal-static>
+              <ShortcutGrid
+                onNavigate={navigate}
+                unreadCount={unreadCount}
+                teacherTel={teacherContact?.tel}
+                teacherPhone={teacherContact?.phone}
+                teacherName={teacherContact?.name}
               />
-            </section>
+            </div>
 
-            {/* 3. WELCOME SUMMARY */}
-            <section aria-label="Lời chào và tóm tắt">
-              <WelcomeSummary
-                parentName={currentUser?.name || "Quý Phụ huynh"}
-                selectedChild={selectedChild}
-              />
-            </section>
-
-            {/* 4. PARENT GRADE OVERVIEW */}
-            {/* Information priority: Học sinh -> Kỳ -> Điểm TB -> Môn -> Chi tiết -> Nhận xét */}
-            <section aria-label="Tổng quan điểm số">
-              <div className="p-5 sm:p-6 rounded-[20px] bg-white border border-[#E7E5E4] shadow-xs space-y-6">
-                <div className="flex items-center justify-between pb-3 border-b border-[#F5F5F4]">
-                  <div>
-                    <h3 className="text-[20px] sm:text-[22px] font-bold text-[#1C1917] font-serif">
-                      Kết Quả Học Tập
-                    </h3>
-                    <p className="text-[14px] text-[#78716C]">
-                      Bảng điểm Giáo lý và Kinh Thánh của con
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveParentTab("scores")}
-                    className="min-h-[52px] px-4 py-2 rounded-[12px] text-[16px] font-bold text-[#B4232C] hover:bg-[#FFF1F2] transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    <span>Xem đầy đủ</span>
-                    <FileSpreadsheet className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <ParentGradeOverview
-                  linkedStudents={linkedChildren}
-                  selectedChildId={selectedChildId}
-                  onChildChange={switchChild}
-                  selectedPeriod={selectedPeriod}
-                  onPeriodChange={switchPeriod}
-                  report={report}
-                  isLoading={isLoadingReport || isRefreshing}
-                />
-              </div>
-            </section>
-
-            {/* 5. ATTENDANCE SUMMARY CARD */}
-            {/* Format: "X/Y buổi", progress bar %, "Vắng: N" */}
-            <section aria-label="Thẻ tóm tắt chuyên cần">
-              <AttendanceSummaryCard
-                attendance={
-                  report?.attendance || {
-                    totalSessions: 20,
-                    attendedSessions: 18,
-                    absentSessions: 2,
-                    excusedSessions: 1,
-                    attendanceRate: 90,
-                  }
-                }
-                studentName={selectedChild.name}
-                isLoading={isLoadingReport || isRefreshing}
-                onViewHistory={() => setActiveParentTab("attendance")}
-              />
-            </section>
-
-            {/* 6. NOTIFICATION PREVIEW */}
-            <section aria-label="Xem trước thông báo">
-              <div className="p-5 sm:p-6 rounded-[20px] bg-white border border-[#E7E5E4] shadow-xs">
-                <NotificationPreview
-                  notifications={notifications}
-                  isLoading={isLoadingNotifications || isRefreshing}
-                  onViewAll={() => setActiveParentTab("notifications")}
-                  onSelectNotification={(n) => markNotificationAsRead(n.id)}
-                />
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* ================================================================= */}
-        {/* VIEW 2: PARENT SCORES TAB                                         */}
-        {/* Full Wireframe C Screen                                           */}
-        {/* ================================================================= */}
-        {activeParentTab === "scores" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveParentTab("dashboard")}
-                className="min-h-[52px] px-4 py-2 rounded-[12px] text-[16px] font-semibold text-[#57534E] hover:bg-white border border-[#E7E5E4] transition-colors cursor-pointer flex items-center gap-2"
-              >
-                <ChevronLeft className="w-5 h-5" />
-                <span>Quay lại Trang chủ</span>
-              </button>
-              <span className="text-[14px] text-[#78716C] font-semibold">
-                Bảng điểm chi tiết
+            <button
+              type="button"
+              data-reveal-static
+              onClick={() => navigate("/parent/achievements")}
+              className={cn(
+                "flex min-h-18 w-full items-center gap-3 rounded-card border border-line bg-surface p-4 text-left shadow-card",
+                "transition-[transform,box-shadow,border-color] duration-200 ease-out-soft hover:-translate-y-0.5 hover:border-line-strong hover:shadow-float active:scale-[0.99]",
+                "focus-visible:outline-3 focus-visible:outline-offset-2"
+              )}
+            >
+              <IconTile icon={<Trophy />} tone="gold" size="lg" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-lg leading-snug font-semibold text-ink">Thành tích của {callName}</span>
+                <span className="block text-sm text-ink-2">
+                  {reportReady ? `${achievedCount} mốc đã đạt trong kỳ này` : "Xem các mốc con đã đạt"}
+                </span>
               </span>
-            </div>
-
-            <div className="p-5 sm:p-6 rounded-[20px] bg-white border border-[#E7E5E4] shadow-xs space-y-6">
-              <ParentGradeOverview
-                linkedStudents={linkedChildren}
-                selectedChildId={selectedChildId}
-                onChildChange={switchChild}
-                selectedPeriod={selectedPeriod}
-                onPeriodChange={switchPeriod}
-                report={report}
-                isLoading={isLoadingReport || isRefreshing}
-              />
-            </div>
+              <ChevronRight className="size-5 shrink-0 text-ink-3" aria-hidden="true" />
+            </button>
           </div>
-        )}
 
-        {/* ================================================================= */}
-        {/* VIEW 3: PARENT ATTENDANCE TAB                                     */}
-        {/* Wireframe §10 Full Attendance History                             */}
-        {/* ================================================================= */}
-        {activeParentTab === "attendance" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveParentTab("dashboard")}
-                className="min-h-[52px] px-4 py-2 rounded-[12px] text-[16px] font-semibold text-[#57534E] hover:bg-white border border-[#E7E5E4] transition-colors cursor-pointer flex items-center gap-2"
-              >
-                <ChevronLeft className="w-5 h-5" />
-                <span>Quay lại Trang chủ</span>
-              </button>
-              <span className="text-[14px] text-[#78716C] font-semibold">
-                Lịch sử điểm danh
-              </span>
-            </div>
-
-            <ParentChildSwitcher
-              children={linkedChildren}
-              selectedChildId={selectedChildId}
-              onChange={switchChild}
-              isLoading={isRefreshing}
-            />
-
-            <AttendanceSummaryCard
-              attendance={
-                report?.attendance || {
-                  totalSessions: 20,
-                  attendedSessions: 18,
-                  absentSessions: 2,
-                  excusedSessions: 1,
-                  attendanceRate: 90,
-                }
-              }
-              studentName={selectedChild.name}
-              isLoading={isLoadingReport || isRefreshing}
-            />
-
-            {/* Attendance History Log List (§10 Wireframe) */}
-            <div className="p-5 sm:p-6 rounded-[20px] bg-white border border-[#E7E5E4] shadow-xs space-y-4">
-              <h3 className="text-[19px] sm:text-[20px] font-bold text-[#1C1917] font-serif">
-                Lịch Sử Điểm Danh Các Chúa Nhật
-              </h3>
-
-              <div className="divide-y divide-[#F5F5F4]">
-                {[
-                  { date: "24/09/2026", status: "PRESENT", label: "Có mặt", icon: "🟢", note: "Tham dự đúng giờ" },
-                  { date: "17/09/2026", status: "PRESENT", label: "Có mặt", icon: "🟢", note: "Tham dự đầy đủ" },
-                  { date: "10/09/2026", status: "EXCUSED", label: "Có phép", icon: "🟡", note: "Gia đình có việc bận" },
-                  { date: "03/09/2026", status: "ABSENT", label: "Vắng", icon: "🔴", note: "Nghỉ lễ đầu năm" },
-                ].map((item, idx) => (
-                  <div key={idx} className="py-3.5 flex items-center justify-between text-[16px] sm:text-[18px]">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[20px]">{item.icon}</span>
-                      <div>
-                        <span className="font-bold text-[#1C1917] font-serif">{item.date}</span>
-                        <p className="text-[13px] text-[#78716C]">{item.note}</p>
-                      </div>
-                    </div>
-                    <span
-                      className={`font-bold px-3 py-1 rounded-full text-[14px] ${
-                        item.status === "PRESENT"
-                          ? "bg-[#ECFDF3] text-[#168154]"
-                          : item.status === "EXCUSED"
-                          ? "bg-[#FFFBEB] text-[#D97706]"
-                          : "bg-[#FFF1F2] text-[#B4232C]"
-                      }`}
-                    >
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================================================================= */}
-        {/* VIEW 4: PARENT NOTIFICATIONS TAB                                  */}
-        {/* Full Notification List (§24 & Wireframe §11)                     */}
-        {/* ================================================================= */}
-        {activeParentTab === "notifications" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveParentTab("dashboard")}
-                className="min-h-[52px] px-4 py-2 rounded-[12px] text-[16px] font-semibold text-[#57534E] hover:bg-white border border-[#E7E5E4] transition-colors cursor-pointer flex items-center gap-2"
-              >
-                <ChevronLeft className="w-5 h-5" />
-                <span>Quay lại Trang chủ</span>
-              </button>
-              <span className="text-[14px] text-[#78716C] font-semibold">
-                Trung tâm thông báo
-              </span>
-            </div>
-
-            <ParentChildSwitcher
-              children={linkedChildren}
-              selectedChildId={selectedChildId}
-              onChange={switchChild}
-              isLoading={isRefreshing}
-            />
-
-            <NotificationList
+          <div className="lg:col-span-5" data-reveal={revealWhenReady}>
+            <NotificationPreview
               notifications={notifications}
-              isLoading={isLoadingNotifications || isRefreshing}
+              isLoading={!ready}
+              onViewAll={() => navigate("/parent/notifications")}
               onSelectNotification={(n) => markNotificationAsRead(n.id)}
-              onMarkAllRead={markAllNotificationsAsRead}
               onNavigateAction={(path) => {
-                if (path) handleNav(path);
+                if (path) navigate(path);
               }}
             />
           </div>
-        )}
+        </div>
+      </>
+    );
+  };
+
+  const renderScores = () => (
+    <>
+      <ViewHeading title="Bảng điểm" description={`Điểm từng môn và nhận xét của GLV dành cho ${callName}.`} />
+      {reportFailed ? (
+        <>
+          {switcher}
+          {reportError}
+        </>
+      ) : (
+        <ParentGradeOverview
+          linkedStudents={linkedChildren}
+          selectedChildId={selectedChildId}
+          onChildChange={switchChild}
+          selectedPeriod={selectedPeriod}
+          onPeriodChange={switchPeriod}
+          report={report}
+          isLoading={!ready}
+        />
+      )}
+    </>
+  );
+
+  const renderAttendance = () => (
+    <>
+      <div className="space-y-4">
+        <ViewHeading title="Điểm danh" description={`Các buổi học Chúa Nhật của ${callName}.`} />
+        {switcher}
+        <AcademicPeriodSelector selectedPeriod={selectedPeriod} onChange={switchPeriod} isLoading={!ready} />
+      </div>
+
+      {reportFailed ? (
+        reportError
+      ) : (
+        <div className="grid items-start gap-5 lg:grid-cols-12 lg:gap-8">
+          <div className="lg:col-span-5" data-reveal={revealWhenReady}>
+            <AttendanceSummaryCard
+              attendance={
+                report?.attendance ?? {
+                  totalSessions: 0,
+                  attendedSessions: 0,
+                  absentSessions: 0,
+                  excusedSessions: 0,
+                  attendanceRate: 0,
+                }
+              }
+              studentName={callName}
+              periodLabel={report?.periodLabel}
+              sessions={attendanceHistory}
+              isLoading={!ready}
+            />
+          </div>
+          <div className="lg:col-span-7" data-reveal={revealWhenReady}>
+            <AttendanceHistoryList sessions={attendanceHistory} isLoading={!ready} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderNotifications = () => (
+    <>
+      <div className="space-y-4">
+        <ViewHeading
+          title="Thông báo"
+          description={`Tin từ Ban Giáo lý và lớp của ${callName}. Tin khẩn luôn ở trên cùng.`}
+        />
+        {switcher}
+      </div>
+      <NotificationList
+        notifications={notifications}
+        isLoading={!ready}
+        onSelectNotification={(n) => markNotificationAsRead(n.id)}
+        onMarkAllRead={markAllNotificationsAsRead}
+        onNavigateAction={(path) => {
+          if (path) navigate(path);
+        }}
+      />
+    </>
+  );
+
+  const renderAchievements = () => (
+    <>
+      <div className="space-y-4">
+        <ViewHeading title="Thành tích" description={`Những mốc chuyên cần và học tập ${callName} đã đạt được.`} />
+        {switcher}
+        <AcademicPeriodSelector selectedPeriod={selectedPeriod} onChange={switchPeriod} isLoading={!ready} />
+      </div>
+      {reportFailed ? reportError : <ChildAchievements report={report} childName={callName} isLoading={!ready} />}
+    </>
+  );
+
+  return (
+    <div ref={staticRef} className={cn("w-full", className)}>
+      <div ref={dataRef} className="space-y-8">
+        {view === "home" && renderHome()}
+        {view === "scores" && renderScores()}
+        {view === "attendance" && renderAttendance()}
+        {view === "notifications" && renderNotifications()}
+        {view === "achievements" && renderAchievements()}
       </div>
     </div>
   );

@@ -68,8 +68,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, AppPermission[]> = {
 export const MOCK_USERS: Record<UserRole, User> = {
   ADMIN: {
     id: "usr-admin-01",
-    name: "Tôma Nguyễn Quản Trị",
-    christianName: "Tôma",
+    name: "Phêrô Trần Văn Hòa",
+    christianName: "Phêrô",
     email: "admin@kito-vua.edu.vn",
     role: "ADMIN",
     avatarUrl: "",
@@ -120,20 +120,46 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Phiên demo được lưu để tải lại trang không bị đăng xuất (B-01)
+const SESSION_KEY = "qlgl.session";
+const VALID_ROLES: UserRole[] = ["ADMIN", "GLV", "PARENT", "STUDENT"];
+
+function readSession(): UserRole | null {
+  try {
+    const saved = localStorage.getItem(SESSION_KEY) as UserRole | null;
+    return saved && VALID_ROLES.includes(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(role: UserRole | null) {
+  try {
+    if (role) localStorage.setItem(SESSION_KEY, role);
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function AuthProvider({
   children,
-  initialRole = "ADMIN",
-  initialAuth = true,
+  initialRole,
+  initialAuth,
 }: {
   children: React.ReactNode;
+  /** Mặc định: vai trò đã lưu trong phiên, nếu không có thì ADMIN */
   initialRole?: UserRole;
+  /** Mặc định: true nếu có phiên đã lưu (chưa đăng nhập → trang /welcome) */
   initialAuth?: boolean;
 }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuth);
-  const [role, setRole] = useState<UserRole>(initialRole);
-  const [user, setUser] = useState<User | null>(
-    initialAuth ? MOCK_USERS[initialRole] : null
-  );
+  const savedRole = readSession();
+  const startRole: UserRole = initialRole ?? savedRole ?? "ADMIN";
+  const startAuth = initialAuth ?? savedRole !== null;
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(startAuth);
+  const [role, setRole] = useState<UserRole>(startRole);
+  const [user, setUser] = useState<User | null>(startAuth ? MOCK_USERS[startRole] : null);
 
   const permissions = useMemo(() => {
     if (!isAuthenticated || !role) return [];
@@ -150,17 +176,20 @@ export function AuthProvider({
     setRole(targetRole);
     setUser(MOCK_USERS[targetRole]);
     setIsAuthenticated(true);
+    writeSession(targetRole);
   };
 
   const logout = () => {
     setIsAuthenticated(false);
     setUser(null);
+    writeSession(null);
   };
 
   const switchRole = (newRole: UserRole) => {
     setRole(newRole);
     setUser(MOCK_USERS[newRole]);
     setIsAuthenticated(true);
+    writeSession(newRole);
   };
 
   const getDefaultHomePath = () => {

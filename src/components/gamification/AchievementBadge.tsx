@@ -1,75 +1,175 @@
 import React from "react";
-import { Lock, Sparkles, CheckCircle2, Award } from "lucide-react";
+import { Lock, Check, Sparkles } from "lucide-react";
+import { cn } from "../../lib/cn";
+import { Tone } from "../ui/tone";
 
 export type AchievementState = "LOCKED" | "AVAILABLE" | "UNLOCKED" | "NEW";
+export type AchievementRarity = "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
+export type AchievementBadgeSize = "sm" | "md" | "lg";
 
 export interface AchievementBadgeProps {
   id: string;
-  /**
-   * Tên huy hiệu (VD: "Chuyên cần vàng", "Hiệp sĩ Lời Chúa", "Nguyện ngắm sốt sắng")
-   */
+  /** Tên huy hiệu (VD: "Chuyên cần vàng", "Hiệp sĩ Lời Chúa") */
   title: string;
-  /**
-   * Mô tả điều kiện đạt huy hiệu
-   */
+  /** Cách đạt huy hiệu */
   description: string;
-  /**
-   * Biểu tượng hoặc emoji đại diện
-   */
+  /** Icon Lucide đại diện */
   icon: React.ReactNode;
   /**
-   * Trạng thái huy hiệu:
-   * - LOCKED: Muted / grayscale, khóa biểu tượng
-   * - AVAILABLE: Có thể mở khóa / đủ điều kiện nhận
-   * - UNLOCKED: Đã nhận thành công, màu sắc rực rỡ đầy đủ
-   * - NEW: Mới nhận gần đây, có thông báo viền nhẹ và nhãn MỚI
+   * - LOCKED: còn xa, xám + khóa + gợi ý mở khóa
+   * - AVAILABLE: sắp đạt, xám + khóa + tiến độ
+   * - UNLOCKED: đã có, huy chương màu với viền gradient
+   * - NEW: vừa nhận, thêm chấm nhấp nháy + nhãn "Mới"
    */
   status: AchievementState;
-  /**
-   * Điểm kinh nghiệm (XP) thưởng khi đạt huy hiệu
-   */
+  /** XP thưởng khi đạt huy hiệu */
   xpReward?: number;
-  /**
-   * Ngày đạt được (dành cho UNLOCKED hoặc NEW)
-   */
+  /** Ngày đạt (UNLOCKED / NEW) */
   unlockedAt?: string;
-  /**
-   * Độ hiếm / danh mục huy hiệu (Đồng, Bạc, Vàng, Kim Cương)
-   */
-  rarity?: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
-  /**
-   * Callback khi nhấn vào huy hiệu
-   */
+  /** Độ hiếm — quyết định màu khi không truyền `tone` */
+  rarity?: AchievementRarity;
   onClick?: () => void;
+  className?: string;
+  /** v2: màu huy chương (kid palette) */
+  tone?: Tone;
+  /** v2: tiến độ mở khóa */
+  progress?: { current: number; total: number };
+  /** v2: gợi ý mở khóa ngắn, VD "Còn 2 buổi nữa" */
+  progressText?: string;
+  /** v2: kích thước (sm cho kệ cuộn ngang, md cho lưới) */
+  size?: AchievementBadgeSize;
+}
+
+// ----------------------------------------------------------------------------
+// Medal color maps — chuỗi class đầy đủ để Tailwind nhận diện
+// ----------------------------------------------------------------------------
+const MEDAL_GRADIENT: Record<Tone, string> = {
+  neutral: "from-ink-3 to-ink-2",
+  primary: "from-primary to-coral",
+  gold: "from-gold to-sun",
+  success: "from-success to-mint",
+  warning: "from-warning to-sun",
+  danger: "from-danger to-coral",
+  info: "from-info to-sky",
+  sky: "from-sky to-grape",
+  mint: "from-mint to-sky",
+  sun: "from-sun to-coral",
+  grape: "from-grape to-rose",
+  coral: "from-coral to-rose",
+  rose: "from-rose to-grape",
+};
+
+/** Màu icon trên huy chương: tone sáng dùng chữ tối, còn lại dùng on-solid (tự đảo ở Dark). */
+const MEDAL_ICON: Record<Tone, string> = {
+  neutral: "text-canvas",
+  primary: "text-on-primary",
+  gold: "text-night",
+  success: "text-on-solid",
+  warning: "text-on-solid",
+  danger: "text-on-solid",
+  info: "text-on-solid",
+  sky: "text-on-solid",
+  mint: "text-night",
+  sun: "text-night",
+  grape: "text-on-solid",
+  coral: "text-on-solid",
+  rose: "text-on-solid",
+};
+
+const RARITY_TONE: Record<AchievementRarity, Tone> = {
+  COMMON: "sky",
+  RARE: "grape",
+  EPIC: "rose",
+  LEGENDARY: "gold",
+};
+
+const MEDAL_SIZE: Record<AchievementBadgeSize, { rim: string; icon: string; lock: string }> = {
+  sm: { rim: "max-w-16", icon: "[&_svg]:size-7", lock: "size-6 [&_svg]:size-3.5" },
+  md: { rim: "max-w-18", icon: "[&_svg]:size-8", lock: "size-7 [&_svg]:size-4" },
+  lg: { rim: "max-w-28", icon: "[&_svg]:size-12", lock: "size-9 [&_svg]:size-5" },
+};
+
+export function isBadgeEarned(status: AchievementState): boolean {
+  return status === "UNLOCKED" || status === "NEW";
+}
+
+/** Câu mô tả trạng thái cho screen reader và dòng phụ. */
+export function badgeStatusText(status: AchievementState, progressText?: string): string {
+  if (status === "NEW") return "Mới nhận";
+  if (status === "UNLOCKED") return "Đã có";
+  return progressText ? `Chưa mở. ${progressText}` : "Chưa mở. Chạm để xem cách mở";
+}
+
+export interface BadgeMedalProps {
+  icon: React.ReactNode;
+  status: AchievementState;
+  tone?: Tone;
+  size?: AchievementBadgeSize;
   className?: string;
 }
 
-const getRarityColor = (rarity?: string) => {
-  switch (rarity) {
-    case "LEGENDARY":
-      return "from-[#E3B341] to-[#F28C28] text-white";
-    case "EPIC":
-      return "from-[#7C5CFC] to-[#E86A92] text-white";
-    case "RARE":
-      return "from-[#3B82F6] to-[#18B7C9] text-white";
-    case "COMMON":
-    default:
-      return "from-[#D6D3D1] to-[#A8A29E] text-[#292524]";
+/** Huy chương tròn — dùng lại trong kệ, lưới và sheet chi tiết. */
+export const BadgeMedal = React.forwardRef<HTMLSpanElement, BadgeMedalProps>(
+  ({ icon, status, tone = "grape", size = "md", className }, ref) => {
+    const earned = isBadgeEarned(status);
+    const dims = MEDAL_SIZE[size];
+
+    return (
+      <span ref={ref} className={cn("relative mx-auto block aspect-square w-full", dims.rim, className)}>
+        {/* Viền: gradient vàng khi đã có, xám khi chưa mở */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute inset-0 rounded-full p-1",
+            earned ? "bg-linear-to-br from-gold via-sun to-coral shadow-card" : "bg-surface-3"
+          )}
+        >
+          <span
+            className={cn(
+              "flex size-full items-center justify-center rounded-full ring-2 ring-surface",
+              earned
+                ? cn("bg-linear-to-br", MEDAL_GRADIENT[tone], MEDAL_ICON[tone])
+                : "bg-surface-2 text-ink-3 grayscale",
+              status === "LOCKED" && "opacity-60",
+              dims.icon
+            )}
+          >
+            {icon}
+          </span>
+        </span>
+
+        {/* Khóa cho huy hiệu chưa mở */}
+        {!earned && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-full border border-line bg-surface text-ink-2 shadow-xs",
+              dims.lock
+            )}
+          >
+            <Lock strokeWidth={2.5} />
+          </span>
+        )}
+
+        {/* Chấm nhấp nháy cho huy hiệu mới */}
+        {status === "NEW" && (
+          <span aria-hidden="true" className="absolute top-0.5 right-0.5 flex size-4">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-60 motion-reduce:animate-none" />
+            <span className="relative inline-flex size-4 rounded-full bg-primary ring-2 ring-surface" />
+          </span>
+        )}
+      </span>
+    );
   }
-};
+);
+
+BadgeMedal.displayName = "BadgeMedal";
 
 /**
- * AchievementBadge Component (§26 03_Component_Library)
- *
- * QUY TẮC BẢO VỆ RULE-015:
- * Gamification (AchievementBadge, XPProgress, màu game-*) CHỈ xuất hiện trong khu vực Student,
- * KHÔNG được lẫn vào Admin/GLV/Parent academic data view.
- *
- * States:
- * - LOCKED: grayscale, muted, lock icon
- * - AVAILABLE: subtle accent outline, pulse
- * - UNLOCKED: full color, unlocked checkmark
- * - NEW: subtle badge pulse & "MỚI" indicator
+ * AchievementBadge (03 §10) — huy hiệu tròn lớn.
+ * UNLOCKED: màu đầy đủ, viền gradient. NEW: + chấm nhấp nháy + nhãn "Mới".
+ * AVAILABLE / LOCKED: xám, icon khóa và câu gợi ý cách mở (không chỉ dùng màu).
+ * Gamification chỉ dùng trong khu Học sinh (RULE-015).
  */
 export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
   id,
@@ -81,103 +181,102 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
   unlockedAt,
   rarity = "COMMON",
   onClick,
-  className = "",
+  className,
+  tone,
+  progress,
+  progressText,
+  size = "md",
 }) => {
-  const isLocked = status === "LOCKED";
-  const isAvailable = status === "AVAILABLE";
-  const isUnlocked = status === "UNLOCKED";
-  const isNew = status === "NEW";
+  const earned = isBadgeEarned(status);
+  const medalTone = tone ?? RARITY_TONE[rarity];
+  const hint = progressText ?? (progress ? `${progress.current}/${progress.total}` : undefined);
+  const statusText = badgeStatusText(status, hint);
+
+  const ariaLabel = [
+    title,
+    statusText,
+    earned && unlockedAt ? `Ngày nhận ${unlockedAt}` : undefined,
+    xpReward ? `Thưởng ${xpReward} XP` : undefined,
+  ]
+    .filter(Boolean)
+    .join(". ");
+
+  const content = (
+    <>
+      <BadgeMedal
+        icon={icon}
+        status={status}
+        tone={medalTone}
+        size={size}
+        className={onClick ? "transition-transform duration-300 ease-spring group-hover:scale-105" : undefined}
+      />
+
+      <span className="flex w-full flex-col items-center gap-1">
+        <span
+          className={cn(
+            "line-clamp-2 leading-snug font-semibold text-ink",
+            size === "sm" ? "text-sm" : "text-sm sm:text-base"
+          )}
+        >
+          {title}
+        </span>
+
+        {status === "NEW" && (
+          <span className="inline-flex h-6 items-center gap-1 rounded-full bg-primary px-2 text-xs font-bold text-on-primary">
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            Mới
+          </span>
+        )}
+
+        {status === "UNLOCKED" && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+            <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
+            Đã có
+          </span>
+        )}
+
+        {!earned && (
+          <span className="line-clamp-2 text-xs leading-snug font-medium text-ink-2">
+            {hint ?? description}
+          </span>
+        )}
+      </span>
+    </>
+  );
+
+  const baseClass = cn(
+    "group relative flex w-full flex-col items-center gap-2.5 rounded-card border p-2.5 pt-3 text-center sm:p-3",
+    status === "NEW"
+      ? "border-gold/40 bg-gold-soft"
+      : earned
+        ? "border-line bg-surface shadow-xs"
+        : "border-dashed border-line-strong bg-surface-2/60",
+    className
+  );
+
+  if (!onClick) {
+    return (
+      <div data-achievement-id={id} role="img" aria-label={ariaLabel} className={baseClass}>
+        {content}
+      </div>
+    );
+  }
 
   return (
-    <div
+    <button
+      type="button"
       data-achievement-id={id}
-      role="button"
-      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={(e) => {
-        if (onClick && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className={`relative group rounded-2xl p-4 transition-all duration-300 flex flex-col items-center text-center ${
-        isLocked
-          ? "bg-[#FAFAF9] border border-[#E7E5E4] opacity-60 grayscale cursor-default"
-          : isAvailable
-          ? "bg-white border-2 border-dashed border-[#F4C95D] shadow-xs hover:shadow-md cursor-pointer hover:scale-[1.02]"
-          : isNew
-          ? "bg-gradient-to-b from-[#FFFBEB] to-white border-2 border-[#E3B341] shadow-md hover:shadow-lg cursor-pointer hover:scale-[1.03] ring-2 ring-[#E3B341]/20"
-          : "bg-white border border-[#E7E5E4] shadow-xs hover:shadow-md hover:border-[#7C5CFC]/50 cursor-pointer hover:scale-[1.02]"
-      } ${className}`}
+      aria-label={ariaLabel}
+      className={cn(
+        baseClass,
+        "min-h-13 cursor-pointer select-none",
+        "transition-[transform,box-shadow,background-color] duration-200 ease-out-soft",
+        "hover:-translate-y-0.5 hover:shadow-float active:scale-[0.97]",
+        "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50"
+      )}
     >
-      {/* "MỚI" or Status Tag */}
-      {isNew && (
-        <span className="absolute -top-2.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#E3B341] text-[#1C1917] shadow-sm flex items-center gap-1 animate-bounce">
-          <Sparkles className="w-2.5 h-2.5" />
-          <span>Mới!</span>
-        </span>
-      )}
-
-      {isAvailable && (
-        <span className="absolute -top-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#7C5CFC] text-white shadow-xs">
-          Sẵn sàng nhận
-        </span>
-      )}
-
-      {/* Icon Frame */}
-      <div className="relative my-1">
-        <div
-          className={`w-14 h-14 rounded-2xl flex items-center justify-center text-[26px] shadow-inner transition-transform group-hover:scale-110 ${
-            isLocked
-              ? "bg-[#E7E5E4] text-[#78716C]"
-              : `bg-gradient-to-br ${getRarityColor(rarity)} shadow-md`
-          }`}
-        >
-          {icon}
-        </div>
-
-        {/* Lock or Checkmark Overlay */}
-        {isLocked && (
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#78716C] text-white flex items-center justify-center shadow-xs">
-            <Lock className="w-3 h-3" />
-          </div>
-        )}
-        {(isUnlocked || isNew) && (
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#22A06B] text-white flex items-center justify-center shadow-xs">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="mt-2.5 space-y-1 w-full">
-        <h4 className="text-[14px] font-bold text-[#1C1917] line-clamp-1 font-serif">
-          {title}
-        </h4>
-        <p className="text-[12px] text-[#78716C] line-clamp-2 leading-relaxed">
-          {description}
-        </p>
-      </div>
-
-      {/* XP or Unlocked Date */}
-      <div className="mt-3 pt-2 w-full border-t border-[#F5F5F4] flex items-center justify-between text-[11px]">
-        {xpReward ? (
-          <span className="font-bold text-[#7C5CFC] flex items-center gap-1">
-            <Award className="w-3 h-3 text-[#E3B341]" />
-            +{xpReward} XP
-          </span>
-        ) : (
-          <span className="text-[#A8A29E]">{rarity}</span>
-        )}
-
-        {isLocked ? (
-          <span className="text-[#A8A29E]">Chưa mở</span>
-        ) : unlockedAt ? (
-          <span className="text-[#78716C] font-mono">{unlockedAt}</span>
-        ) : (
-          <span className="text-[#22A06B] font-semibold">Đã đạt</span>
-        )}
-      </div>
-    </div>
+      {content}
+    </button>
   );
 };

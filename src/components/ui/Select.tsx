@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useId } from "react";
-import { ChevronDown, Check, X, AlertCircle } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
+import { cn } from "../../lib/cn";
+import { BottomSheet } from "./BottomSheet";
+import { FIELD_SIZE_CLASSES, FieldLabel, FieldMessage, fieldStateClasses } from "./Input";
 
 export interface SelectOption {
   value: string;
@@ -23,8 +26,44 @@ export interface SelectProps {
   className?: string;
   id?: string;
   onChange: (value: string) => void;
+  /** Nhãn cho trình đọc màn hình khi không có label hiển thị */
+  ariaLabel?: string;
 }
 
+const MOBILE_QUERY = "(max-width: 767.98px)";
+
+function useIsBelowMd(): boolean {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(MOBILE_QUERY).matches
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(MOBILE_QUERY);
+    const update = () => setMatches(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+
+  return matches;
+}
+
+/** Bỏ dấu tiếng Việt để tìm theo chữ cái đầu (typeahead). */
+function normalize(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .toLowerCase();
+}
+
+/**
+ * Select (03 §4.3)
+ * - Desktop (>= md): dropdown nổi, hỗ trợ bàn phím (mũi tên, Home/End, Enter/Space, Esc, gõ chữ cái đầu).
+ * - Mobile (< md): mở BottomSheet danh sách lựa chọn lớn (>= 3.5rem mỗi dòng).
+ */
 export const Select: React.FC<SelectProps> = ({
   label,
   value,
@@ -38,271 +77,308 @@ export const Select: React.FC<SelectProps> = ({
   className = "",
   id,
   onChange,
+  ariaLabel,
 }) => {
   const generatedId = useId();
   const selectId = id || generatedId;
   const errorId = `${selectId}-error`;
   const helperId = `${selectId}-helper`;
+  const labelId = `${selectId}-label`;
+  const valueId = `${selectId}-value`;
+  const listboxId = `${selectId}-listbox`;
+  const optionId = (index: number) => `${selectId}-option-${index}`;
 
   const [isOpen, setIsOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const isMobile = useIsBelowMd();
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const typeahead = useRef<{ text: string; timer: number | undefined }>({ text: "", timer: undefined });
 
-  // Responsive mobile detector (< 768px breakpoint)
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  // Close desktop dropdown on click outside or Escape
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isOpen) {
-        setIsOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
-
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedIndex = options.findIndex((opt) => opt.value === value);
+  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
   const hasError = Boolean(error);
+  const desktopOpen = isOpen && !isMobile;
 
-  const sizeClasses: Record<SelectSize, string> = {
-    sm: "h-[40px] text-[15px] px-3.5 rounded-[8px]",
-    md: "h-[48px] text-[16px] px-4 rounded-[10px]",
-    lg: "h-[52px] text-[16px] px-4 rounded-[10px]",
-    parent: "h-[56px] text-[18px] px-5 rounded-[12px] font-medium",
+  const firstEnabled = () => options.findIndex((opt) => !opt.disabled);
+  const lastEnabled = () => {
+    for (let i = options.length - 1; i >= 0; i--) if (!options[i].disabled) return i;
+    return -1;
+  };
+  const step = (from: number, delta: 1 | -1) => {
+    for (let i = from + delta; i >= 0 && i < options.length; i += delta) {
+      if (!options[i].disabled) return i;
+    }
+    return from;
   };
 
-  const labelSizeClasses: Record<SelectSize, string> = {
-    sm: "text-[13px] mb-1",
-    md: "text-[14px] mb-1.5",
-    lg: "text-[15px] mb-1.5",
-    parent: "text-[16px] mb-2 font-semibold text-[#1C1917]",
+  // Đóng dropdown desktop khi bấm ra ngoài
+  useEffect(() => {
+    if (!desktopOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [desktopOpen]);
+
+  // Giữ mục đang active trong vùng nhìn thấy
+  useEffect(() => {
+    if (!desktopOpen || activeIndex < 0) return;
+    document.getElementById(`${selectId}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [desktopOpen, activeIndex, selectId]);
+
+  useEffect(() => () => window.clearTimeout(typeahead.current.timer), []);
+
+  const openMenu = (preferredIndex?: number) => {
+    if (disabled) return;
+    setActiveIndex(preferredIndex ?? (selectedIndex >= 0 ? selectedIndex : firstEnabled()));
+    setIsOpen(true);
   };
 
-  const handleSelect = (optValue: string) => {
-    onChange(optValue);
+  const closeMenu = () => {
     setIsOpen(false);
     triggerRef.current?.focus();
   };
 
-  return (
-    <div ref={containerRef} className={`relative w-full flex flex-col font-sans ${className}`}>
-      {/* Label */}
-      {label && (
-        <label
-          htmlFor={selectId}
-          className={`font-medium text-[#292524] flex items-center gap-1 ${labelSizeClasses[size]}`}
-        >
-          <span>{label}</span>
-          {required && <span className="text-[#DC4C4C] font-bold" aria-hidden="true">*</span>}
-        </label>
-      )}
+  const handleSelect = (optValue: string) => {
+    onChange(optValue);
+    closeMenu();
+  };
 
-      {/* Select Trigger */}
-      <button
-        ref={triggerRef}
-        id={selectId}
-        type="button"
-        disabled={disabled}
-        role="combobox"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        aria-required={required}
-        aria-invalid={hasError ? "true" : "false"}
-        aria-describedby={hasError ? errorId : helperText ? helperId : undefined}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`
-          w-full flex items-center justify-between text-left transition-colors duration-150 outline-none
-          border bg-white cursor-pointer select-none
-          ${sizeClasses[size]}
-          ${
-            hasError
-              ? "border-[#DC4C4C] text-[#DC4C4C] focus-visible:ring-3 focus-visible:ring-[#DC4C4C]/25"
-              : isOpen
-              ? "border-[#B4232C] ring-3 ring-[#B4232C]/20"
-              : "border-[#D6D3D1] hover:border-[#A8A29E] focus-visible:ring-3 focus-visible:ring-[#B4232C]/20"
+  const findByTypeahead = (key: string) => {
+    const state = typeahead.current;
+    window.clearTimeout(state.timer);
+    state.text += normalize(key);
+    state.timer = window.setTimeout(() => {
+      state.text = "";
+    }, 600);
+
+    const query = state.text;
+    const repeated = query.length > 1 && query.split("").every((ch) => ch === query[0]);
+    const needle = repeated ? query[0] : query;
+    const start = repeated || query.length === 1 ? activeIndex + 1 : Math.max(activeIndex, 0);
+
+    for (let n = 0; n < options.length; n++) {
+      const index = (start + n) % options.length;
+      const opt = options[index];
+      if (!opt.disabled && normalize(opt.label).startsWith(needle)) return index;
+    }
+    return -1;
+  };
+
+  const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+
+    if (isMobile) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        openMenu();
+      }
+      return;
+    }
+
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        if (!isOpen) openMenu();
+        else setActiveIndex((i) => step(i < 0 ? -1 : i, 1));
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        if (!isOpen) openMenu();
+        else setActiveIndex((i) => step(i < 0 ? options.length : i, -1));
+        break;
+      case "Home":
+        if (isOpen) {
+          event.preventDefault();
+          setActiveIndex(firstEnabled());
+        }
+        break;
+      case "End":
+        if (isOpen) {
+          event.preventDefault();
+          setActiveIndex(lastEnabled());
+        }
+        break;
+      case "Enter":
+      case " ":
+        if (isOpen) {
+          event.preventDefault();
+          const opt = options[activeIndex];
+          if (opt && !opt.disabled) handleSelect(opt.value);
+          else closeMenu();
+        }
+        break;
+      case "Escape":
+        if (isOpen) {
+          // Không để Esc đóng luôn Modal/BottomSheet bên ngoài
+          event.preventDefault();
+          event.stopPropagation();
+          closeMenu();
+        }
+        break;
+      case "Tab":
+        if (isOpen) setIsOpen(false);
+        break;
+      default:
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          const match = findByTypeahead(event.key);
+          if (match >= 0) {
+            if (!isOpen) openMenu(match);
+            else setActiveIndex(match);
           }
-          ${disabled ? "bg-[#F5F5F4] border-[#E7E5E4] opacity-70 cursor-not-allowed text-[#A8A29E]" : ""}
-        `}
-      >
-        <span className={`truncate ${!selectedOption ? "text-[#A8A29E]" : "text-[#292524]"}`}>
-          {selectedOption ? selectedOption.label : placeholder}
-        </span>
-        <ChevronDown
-          className={`w-5 h-5 ml-2 shrink-0 transition-transform duration-200 ${
-            isOpen ? "rotate-180 text-[#B4232C]" : "text-[#78716C]"
-          }`}
-          aria-hidden="true"
-        />
-      </button>
+        }
+    }
+  };
 
-      {/* Error or Helper text */}
-      {hasError ? (
-        <p id={errorId} role="alert" className="mt-1.5 text-[13px] font-medium text-[#DC4C4C] flex items-center gap-1">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </p>
-      ) : helperText ? (
-        <p id={helperId} className="mt-1.5 text-[13px] text-[#78716C]">
-          {helperText}
-        </p>
-      ) : null}
+  const labelledBy = label ? `${labelId} ${valueId}` : undefined;
 
-      {/* DESKTOP VIEW: Dropdown Popover */}
-      {isOpen && !isMobile && (
-        <div
-          role="listbox"
-          className="absolute left-0 right-0 top-full mt-1 z-[100] max-h-64 overflow-y-auto rounded-[10px] border border-[#E7E5E4] bg-white shadow-lg py-1.5 focus:outline-none"
-        >
-          {options.length === 0 ? (
-            <div className="px-4 py-3 text-[14px] text-[#78716C] text-center">
-              Không có lựa chọn nào
-            </div>
-          ) : (
-            options.map((opt) => {
-              const isSelected = opt.value === value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  disabled={opt.disabled}
-                  onClick={() => !opt.disabled && handleSelect(opt.value)}
-                  className={`
-                    w-full flex items-center justify-between px-4 py-2.5 text-left text-[15px] transition-colors
-                    ${
-                      isSelected
-                        ? "bg-[#FFF1F2] text-[#B4232C] font-semibold"
-                        : "text-[#292524] hover:bg-[#F5F5F4]"
-                    }
-                    ${opt.disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}
-                  `}
-                >
-                  <div className="flex flex-col">
-                    <span>{opt.label}</span>
-                    {opt.description && (
-                      <span className="text-[12px] text-[#78716C] font-normal">
-                        {opt.description}
-                      </span>
-                    )}
-                  </div>
-                  {isSelected && (
-                    <Check className="w-4 h-4 text-[#B4232C] shrink-0 ml-2" aria-hidden="true" />
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
+  return (
+    <div ref={containerRef} className={cn("flex w-full flex-col", className)}>
+      {label && (
+        <FieldLabel htmlFor={selectId} id={labelId} size={size} required={required}>
+          {label}
+        </FieldLabel>
       )}
 
-      {/* MOBILE VIEW: Touch-friendly BottomSheet Modal */}
-      {isOpen && isMobile && (
-        <div className="fixed inset-0 z-[500] flex flex-col justify-end">
-          {/* Backdrop Overlay */}
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-            onClick={() => setIsOpen(false)}
+      <div className="relative w-full">
+        {/* Trigger */}
+        <button
+          ref={triggerRef}
+          id={selectId}
+          type="button"
+          disabled={disabled}
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-controls={desktopOpen ? listboxId : undefined}
+          aria-activedescendant={desktopOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+          aria-labelledby={labelledBy}
+          aria-label={label ? undefined : ariaLabel || placeholder}
+          aria-required={required || undefined}
+          aria-invalid={hasError ? "true" : "false"}
+          aria-describedby={hasError ? errorId : helperText ? helperId : undefined}
+          onClick={() => (isOpen ? closeMenu() : openMenu())}
+          onKeyDown={handleTriggerKeyDown}
+          className={cn(
+            "flex w-full items-center justify-between rounded-control border text-left outline-none select-none",
+            "transition-[border-color,box-shadow,background-color] duration-150",
+            FIELD_SIZE_CLASSES[size],
+            fieldStateClasses({ hasError, disabled }),
+            !disabled && "cursor-pointer",
+            isOpen && !hasError && "border-primary ring-4 ring-primary/15"
+          )}
+        >
+          <span id={valueId} className={cn("min-w-0 truncate", selectedOption ? "text-ink" : "text-ink-3")}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              "shrink-0 transition-transform duration-200 ease-out-soft",
+              isOpen ? "rotate-180 text-primary" : "text-ink-3"
+            )}
             aria-hidden="true"
           />
+        </button>
 
-          {/* BottomSheet Container */}
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={label || "Chọn một mục"}
-            className="relative z-10 w-full max-h-[80vh] bg-white rounded-t-[20px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-250"
+        {/* Desktop: dropdown */}
+        {desktopOpen && (
+          <ul
+            id={listboxId}
+            role="listbox"
+            aria-labelledby={label ? labelId : undefined}
+            aria-label={label ? undefined : ariaLabel || placeholder}
+            tabIndex={-1}
+            className="absolute inset-x-0 top-full z-(--z-overlay) mt-1.5 max-h-72 overflow-y-auto overscroll-contain rounded-control border border-line bg-surface p-1.5 shadow-float"
           >
-            {/* Grab Handle */}
-            <div className="w-full flex justify-center pt-3 pb-1">
-              <div className="w-12 h-1.5 bg-[#E7E5E4] rounded-full" />
-            </div>
-
-            {/* BottomSheet Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[#E7E5E4]">
-              <h3 className="text-[17px] font-bold text-[#1C1917]">
-                {label || placeholder}
-              </h3>
-              <button
-                type="button"
-                aria-label="Đóng"
-                onClick={() => setIsOpen(false)}
-                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-[#F5F5F4] text-[#78716C]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* BottomSheet List */}
-            <div role="listbox" className="overflow-y-auto p-2 pb-8 max-h-[60vh]">
-              {options.length === 0 ? (
-                <div className="p-6 text-center text-[#78716C]">Không có lựa chọn nào</div>
-              ) : (
-                options.map((opt) => {
-                  const isSelected = opt.value === value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      disabled={opt.disabled}
-                      onClick={() => !opt.disabled && handleSelect(opt.value)}
-                      className={`
-                        w-full flex items-center justify-between px-4 py-3.5 rounded-[12px] my-1 text-left text-[16px]
-                        min-h-[50px] transition-colors
-                        ${
-                          isSelected
-                            ? "bg-[#FFF1F2] text-[#B4232C] font-semibold"
-                            : "text-[#292524] hover:bg-[#F5F5F4] active:bg-[#E7E5E4]"
-                        }
-                        ${opt.disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}
-                      `}
-                    >
-                      <div className="flex flex-col">
-                        <span className="leading-snug">{opt.label}</span>
-                        {opt.description && (
-                          <span className="text-[13px] text-[#78716C] mt-0.5">
-                            {opt.description}
-                          </span>
-                        )}
-                      </div>
-                      {isSelected && (
-                        <Check className="w-5 h-5 text-[#B4232C] shrink-0 ml-3" aria-hidden="true" />
+            {options.length === 0 ? (
+              <li className="px-3 py-3 text-center text-sm text-ink-3">Không có lựa chọn nào</li>
+            ) : (
+              options.map((opt, index) => {
+                const isSelected = opt.value === value;
+                const isActive = index === activeIndex;
+                return (
+                  <li
+                    key={opt.value}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={isSelected}
+                    aria-disabled={opt.disabled || undefined}
+                    onMouseEnter={() => !opt.disabled && setActiveIndex(index)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => !opt.disabled && handleSelect(opt.value)}
+                    className={cn(
+                      "flex min-h-11 items-center justify-between gap-3 rounded-sm px-3 py-2 text-base transition-colors duration-100",
+                      isActive && !opt.disabled && "bg-surface-2",
+                      isSelected ? "font-semibold text-primary-ink" : "text-ink",
+                      opt.disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                    )}
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate">{opt.label}</span>
+                      {opt.description && (
+                        <span className="text-sm font-normal text-ink-3">{opt.description}</span>
                       )}
-                    </button>
-                  );
-                })
-              )}
+                    </span>
+                    {isSelected && <Check className="size-4 shrink-0" aria-hidden="true" />}
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        )}
+      </div>
+
+      <FieldMessage id={hasError ? errorId : helperId} error={error} helperText={helperText} size={size} />
+
+      {/* Mobile: BottomSheet danh sách lớn */}
+      {isMobile && (
+        <BottomSheet isOpen={isOpen} onClose={() => setIsOpen(false)} title={label || placeholder}>
+          {options.length === 0 ? (
+            <p className="py-6 text-center text-base text-ink-3">Không có lựa chọn nào</p>
+          ) : (
+            <div role="listbox" aria-label={label || ariaLabel || placeholder} className="-mx-2 space-y-1 pb-2">
+              {options.map((opt, index) => {
+                const isSelected = opt.value === value;
+                const autoFocus = selectedIndex >= 0 ? isSelected : index === firstEnabled();
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    disabled={opt.disabled}
+                    data-autofocus={autoFocus ? "" : undefined}
+                    onClick={() => !opt.disabled && handleSelect(opt.value)}
+                    className={cn(
+                      "flex min-h-14 w-full items-center justify-between gap-3 rounded-control px-4 py-3 text-left text-base",
+                      "transition-colors duration-100 focus-visible:outline-3 focus-visible:-outline-offset-2 focus-visible:outline-primary/50",
+                      isSelected
+                        ? "bg-primary-soft font-semibold text-primary-ink"
+                        : "text-ink hover:bg-surface-2 active:bg-surface-3",
+                      opt.disabled && "cursor-not-allowed opacity-40"
+                    )}
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="leading-snug">{opt.label}</span>
+                      {opt.description && (
+                        <span className="mt-0.5 text-sm font-normal text-ink-3">{opt.description}</span>
+                      )}
+                    </span>
+                    {isSelected ? (
+                      <Check className="size-5 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <span className="size-5 shrink-0" aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          </div>
-        </div>
+          )}
+        </BottomSheet>
       )}
     </div>
   );

@@ -1,8 +1,15 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { CheckCheck, Inbox, RotateCcw } from "lucide-react";
-import { NotificationData } from "../../types";
+import { NotificationData, NotificationType } from "../../types";
+import { cn } from "../../lib/cn";
+import { useReveal } from "../../lib/motion";
+import { SegmentedControl } from "../ui/SegmentedControl";
+import { Button } from "../ui/Button";
+import { Skeleton } from "../ui/Skeleton";
+import { EmptyState } from "../ui/EmptyState";
 import { NotificationCard } from "./NotificationCard";
 import { NotificationDetailModal } from "./NotificationDetailModal";
+import { NOTIFICATION_TYPE_ORDER, getNotificationTypeMeta } from "./notificationMeta";
 import { sortNotificationsByPriority } from "../../services/parentMockData";
 
 export interface NotificationListProps {
@@ -16,14 +23,27 @@ export interface NotificationListProps {
 
 type FilterMode = "ALL" | "UNREAD";
 
+/** Skeleton đúng hình dạng NotificationCard. */
+export const NotificationCardSkeleton: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
+  <div
+    aria-hidden="true"
+    className={cn("flex items-start gap-3 rounded-card border border-line bg-surface sm:gap-4", compact ? "p-4" : "p-4 sm:p-5")}
+  >
+    <Skeleton className="size-10 shrink-0 rounded-control" />
+    <div className="flex-1 space-y-2.5 pt-1">
+      <Skeleton className="h-4 w-1/3 rounded-full" />
+      <Skeleton className="h-5 w-4/5 rounded-full" />
+      {!compact && <Skeleton className="h-4 w-2/3 rounded-full" />}
+    </div>
+  </div>
+);
+
 /**
- * NotificationList (§24, §30, Wireframe §11)
- *
- * Features:
- * - Sorting priority: URGENT → STUDENT → CLASS → GENERAL → SYSTEM
- * - Filter: Tất cả / Chưa đọc
- * - Action: Đánh dấu tất cả đã đọc (RULE-012: text + icon)
- * - Controls: Touch target >= 52-56px, font-size >= 18px (RULE-010)
+ * NotificationList (03 §11, 04 §16)
+ * - Tab "Tất cả" / "Chưa đọc n" (SegmentedControl)
+ * - Chip lọc theo loại (Khẩn · Học sinh · Lớp · Chung)
+ * - Khẩn luôn ghim trên cùng: URGENT → STUDENT → CLASS → GENERAL → SYSTEM
+ * - "Đánh dấu đã đọc tất cả" có icon + chữ
  */
 export const NotificationList: React.FC<NotificationListProps> = ({
   notifications,
@@ -31,157 +51,145 @@ export const NotificationList: React.FC<NotificationListProps> = ({
   onMarkAllRead,
   onNavigateAction,
   isLoading = false,
-  className = "",
+  className,
 }) => {
   const [filterMode, setFilterMode] = useState<FilterMode>("ALL");
+  const [category, setCategory] = useState<NotificationType | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<NotificationData | null>(null);
 
-  // Strictly sort by priority: URGENT -> STUDENT -> CLASS -> GENERAL -> SYSTEM
-  const sortedNotifications = useMemo(() => {
-    return sortNotificationsByPriority(notifications);
+  const sortedNotifications = useMemo(() => sortNotificationsByPriority(notifications), [notifications]);
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<NotificationType, number>();
+    notifications.forEach((n) => counts.set(n.type, (counts.get(n.type) ?? 0) + 1));
+    return counts;
   }, [notifications]);
 
-  // Apply "Tất cả" vs "Chưa đọc" filter
-  const filteredList = useMemo(() => {
-    if (filterMode === "UNREAD") {
-      return sortedNotifications.filter((n) => !n.isRead);
-    }
-    return sortedNotifications;
-  }, [sortedNotifications, filterMode]);
+  const availableCategories = NOTIFICATION_TYPE_ORDER.filter((type) => (categoryCounts.get(type) ?? 0) > 0);
 
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
-  }, [notifications]);
+  const filteredList = useMemo(
+    () =>
+      sortedNotifications.filter(
+        (n) => (filterMode === "ALL" || !n.isRead) && (category === null || n.type === category)
+      ),
+    [sortedNotifications, filterMode, category]
+  );
+
+  const listRef = useReveal<HTMLUListElement>({ selector: "[data-reveal-item]", deps: [filterMode, category, isLoading] });
 
   const handleCardClick = (item: NotificationData) => {
     setSelectedNotification(item);
-    if (onSelectNotification) {
-      onSelectNotification(item);
-    }
+    onSelectNotification?.(item);
   };
 
+  const isFiltered = filterMode === "UNREAD" || category !== null;
+
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* Controls Bar: Filter [Tất cả] [Chưa đọc] & [Đánh dấu đã đọc] */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-[16px] border border-[#E7E5E4] shadow-xs">
-        {/* Filter buttons - touch target >= 52px, font-size >= 18px (RULE-010) */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setFilterMode("ALL")}
-            className={`min-h-[52px] px-5 sm:px-6 rounded-[12px] font-semibold text-[17px] sm:text-[18px] transition-all cursor-pointer flex items-center justify-center gap-2 border ${
-              filterMode === "ALL"
-                ? "bg-[#B4232C] text-white border-[#B4232C] shadow-xs"
-                : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#FAFAF9]"
-            }`}
-          >
-            <span>Tất cả</span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${
-                filterMode === "ALL"
-                  ? "bg-white/20 text-white"
-                  : "bg-[#F5F5F4] text-[#78716C]"
-              }`}
-            >
-              {notifications.length}
-            </span>
-          </button>
+    <div className={cn("space-y-4", className)}>
+      {/* Tabs + đánh dấu đã đọc */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SegmentedControl<FilterMode>
+          ariaLabel="Lọc thông báo theo trạng thái đọc"
+          size="lg"
+          value={filterMode}
+          onChange={setFilterMode}
+          className="self-start"
+          options={[
+            { value: "ALL", label: "Tất cả" },
+            { value: "UNREAD", label: unreadCount > 0 ? `Chưa đọc ${unreadCount}` : "Chưa đọc" },
+          ]}
+        />
 
-          <button
-            type="button"
-            onClick={() => setFilterMode("UNREAD")}
-            className={`min-h-[52px] px-5 sm:px-6 rounded-[12px] font-semibold text-[17px] sm:text-[18px] transition-all cursor-pointer flex items-center justify-center gap-2 border ${
-              filterMode === "UNREAD"
-                ? "bg-[#B4232C] text-white border-[#B4232C] shadow-xs"
-                : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#FAFAF9]"
-            }`}
-          >
-            <span>Chưa đọc</span>
-            {unreadCount > 0 && (
-              <span
-                className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${
-                  filterMode === "UNREAD"
-                    ? "bg-white/20 text-white"
-                    : "bg-[#FFF1F2] text-[#B4232C]"
-                }`}
-              >
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Mark All Read Action - NO ICON ONLY (RULE-012), min-h >= 52px */}
         {unreadCount > 0 && onMarkAllRead && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            leftIcon={<CheckCheck />}
             onClick={onMarkAllRead}
-            className="min-h-[52px] px-4 py-2 rounded-[12px] font-semibold text-[16px] sm:text-[17px] text-[#57534E] hover:text-[#B4232C] hover:bg-[#FFF1F2] border border-[#E7E5E4] hover:border-[#FECDD3] transition-colors cursor-pointer flex items-center justify-center gap-2 self-stretch sm:self-auto"
+            className="h-auto min-h-(--control) self-start py-2 whitespace-normal"
           >
-            <CheckCheck className="w-5 h-5 text-[#B4232C]" />
-            <span>Đánh dấu tất cả đã đọc</span>
-          </button>
+            Đánh dấu đã đọc tất cả
+          </Button>
         )}
       </div>
 
-      {/* Loading Skeleton */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="p-5 rounded-[14px] bg-white border border-[#E7E5E4] animate-pulse flex items-start gap-3.5 min-h-[64px]"
-            >
-              <div className="w-12 h-12 rounded-[12px] bg-[#E7E5E4]" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-[#E7E5E4] rounded-md w-1/4" />
-                <div className="h-5 bg-[#E7E5E4] rounded-md w-3/4" />
-                <div className="h-4 bg-[#E7E5E4] rounded-md w-1/2" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : filteredList.length === 0 ? (
-        /* Empty State */
-        <div className="bg-white rounded-[16px] border border-[#E7E5E4] p-8 text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-[#FAFAF9] border border-[#E7E5E4] flex items-center justify-center mx-auto text-[#A8A29E]">
-            <Inbox className="w-8 h-8" />
-          </div>
-          <h4 className="text-[18px] font-bold text-[#1C1917] font-serif">
-            {filterMode === "UNREAD"
-              ? "Không có thông báo chưa đọc"
-              : "Chưa có thông báo nào"}
-          </h4>
-          <p className="text-[15px] text-[#78716C] max-w-sm mx-auto">
-            {filterMode === "UNREAD"
-              ? "Quý phụ huynh đã đọc toàn bộ thông báo. Hãy chuyển sang mục 'Tất cả' để xem lại lịch sử."
-              : "Các thông báo từ Ban Giáo lý và Xứ đoàn sẽ hiển thị tại đây khi có tin tức mới."}
-          </p>
-          {filterMode === "UNREAD" && (
-            <button
-              type="button"
-              onClick={() => setFilterMode("ALL")}
-              className="min-h-[52px] px-6 rounded-[12px] font-semibold text-[17px] text-[#B4232C] bg-[#FFF1F2] hover:bg-[#FFE4E6] transition-colors cursor-pointer inline-flex items-center gap-2"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Xem tất cả thông báo</span>
-            </button>
-          )}
-        </div>
-      ) : (
-        /* Notification List */
-        <div className="space-y-3">
-          {filteredList.map((item) => (
-            <NotificationCard
-              key={item.id}
-              notification={item}
-              onClick={handleCardClick}
-            />
-          ))}
+      {/* Chip loại thông báo */}
+      {availableCategories.length > 1 && (
+        <div role="group" aria-label="Lọc theo loại thông báo" className="flex flex-wrap gap-2">
+          {availableCategories.map((type) => {
+            const meta = getNotificationTypeMeta(type);
+            const Icon = meta.icon;
+            const active = category === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setCategory(active ? null : type)}
+                className={cn(
+                  "inline-flex min-h-13 items-center gap-2 rounded-full border px-4 text-base font-semibold select-none",
+                  "transition-[background-color,border-color,color,transform] duration-200 ease-out-soft active:scale-[0.97]",
+                  "focus-visible:outline-3 focus-visible:outline-offset-2",
+                  active
+                    ? "border-night bg-night text-on-night"
+                    : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
+                )}
+              >
+                <Icon className={cn("size-5", !active && type === "URGENT" && "text-danger")} aria-hidden="true" />
+                <span>{meta.label}</span>
+                <span className={cn("tabular-nums", active ? "text-on-night/70" : "text-ink-3")}>
+                  {categoryCounts.get(type)}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Full Detail Modal */}
+      {/* Danh sách */}
+      {isLoading ? (
+        <div className="space-y-3" role="status" aria-label="Đang tải thông báo">
+          {[0, 1, 2].map((i) => (
+            <NotificationCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filteredList.length === 0 ? (
+        <EmptyState
+          icon={<Inbox />}
+          title={isFiltered ? "Không có thông báo phù hợp" : "Chưa có thông báo nào"}
+          description={
+            isFiltered
+              ? filterMode === "UNREAD" && category === null
+                ? "Bạn đã đọc hết thông báo."
+                : "Thử chọn bộ lọc khác để xem thêm."
+              : "Thông báo từ Ban Giáo lý và lớp học sẽ hiện ở đây."
+          }
+          action={
+            isFiltered ? (
+              <Button
+                variant="soft"
+                leftIcon={<RotateCcw />}
+                onClick={() => {
+                  setFilterMode("ALL");
+                  setCategory(null);
+                }}
+              >
+                Xem tất cả thông báo
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <ul ref={listRef} className="space-y-3" aria-label="Danh sách thông báo">
+          {filteredList.map((item) => (
+            <li key={item.id} data-reveal-item>
+              <NotificationCard notification={item} onClick={handleCardClick} />
+            </li>
+          ))}
+        </ul>
+      )}
+
       <NotificationDetailModal
         notification={selectedNotification}
         isOpen={Boolean(selectedNotification)}

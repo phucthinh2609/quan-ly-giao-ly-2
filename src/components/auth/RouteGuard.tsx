@@ -2,7 +2,7 @@ import React from "react";
 import { UserRole, AppPermission } from "../../types";
 import { useAuth, ROLE_DEFAULT_PATHS } from "../../context/AuthContext";
 import { Forbidden403 } from "./Forbidden403";
-import { Button } from "../ui";
+import { Button, IconTile } from "../ui";
 import { Lock, LogIn } from "lucide-react";
 
 export interface RouteGuardProps {
@@ -12,7 +12,7 @@ export interface RouteGuardProps {
    */
   allowedRoles?: UserRole[];
   /**
-   * Optional specific permission required in format "resource:action" (§29)
+   * Optional specific permission required in format "resource:action"
    */
   requiredPermission?: AppPermission;
   /**
@@ -20,35 +20,19 @@ export interface RouteGuardProps {
    */
   currentPath?: string;
   /**
-   * Navigation handler invoked when redirecting to /login or /403 or home.
+   * Navigation handler invoked when redirecting to /login or home.
    */
   onNavigate?: (path: string) => void;
   /**
    * Custom message for 403 state.
-   * Default: "Bạn không có quyền truy cập trang này." (§7)
    */
   forbiddenMessage?: string;
 }
 
 /**
- * RouteGuard (§7 Navigation Contract)
- *
- * Implements pseudo-logic:
- * if !authenticated
- *     → /login
- * else if role == ADMIN
- *     → /admin/dashboard
- * else if role == GLV
- *     → /teacher/dashboard
- * else if role == STUDENT
- *     → /dashboard
- * else if role == PARENT
- *     → /dashboard
- *
- * Unauthorized:
- * /403
- * → "Bạn không có quyền truy cập trang này."
- * → [Quay về trang chủ]
+ * RouteGuard (02 §9 Route Guard v2)
+ * - Chưa đăng nhập → mời đăng nhập (/login)
+ * - Không đủ vai trò/quyền → <Forbidden403 />
  */
 export const RouteGuard: React.FC<RouteGuardProps> = ({
   children,
@@ -56,80 +40,52 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({
   requiredPermission,
   currentPath: _currentPath,
   onNavigate,
-  forbiddenMessage = "Bạn không có quyền truy cập trang này.",
+  forbiddenMessage = "Trang này dành cho vai trò khác.",
 }) => {
   const { isAuthenticated, role, hasPermission, login } = useAuth();
 
-  // 1. Unauthenticated Check -> /login
   if (!isAuthenticated) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center p-6 bg-white rounded-[16px] border border-[#E7E5E4] shadow-xs">
-        <div className="max-w-md w-full text-center space-y-5 animate-in fade-in duration-200">
-          <div className="mx-auto w-14 h-14 rounded-full bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-[#B4232C]">
-            <Lock className="w-7 h-7" />
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="w-full max-w-md space-y-5 text-center">
+          <IconTile icon={<Lock />} tone="primary" size="xl" className="mx-auto" />
+          <div className="space-y-1.5">
+            <h2 className="text-2xl font-bold tracking-tight text-ink">Cần đăng nhập</h2>
+            <p className="text-ink-2">Bạn cần đăng nhập tài khoản Đoàn Kitô Vua để xem trang này.</p>
           </div>
-          <div>
-            <h2 className="text-[20px] font-bold text-[#1C1917] font-serif">
-              Yêu cầu đăng nhập
-            </h2>
-            <p className="text-[14px] text-[#78716C] mt-1">
-              Bạn cần đăng nhập tài khoản Đoàn Kitô Vua để truy cập trang này.
-            </p>
-          </div>
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Button
-              variant="primary"
-              size="lg"
-              leftIcon={<LogIn className="w-4 h-4" />}
-              onClick={() => {
-                if (onNavigate) {
-                  onNavigate("/login");
-                } else {
-                  login("GLV");
-                }
-              }}
-              className="w-full sm:w-auto"
-            >
-              Đăng nhập ngay
-            </Button>
-          </div>
+          <Button
+            size="lg"
+            leftIcon={<LogIn />}
+            onClick={() => (onNavigate ? onNavigate("/login") : login("GLV"))}
+            className="w-full sm:w-auto"
+          >
+            Đăng nhập
+          </Button>
         </div>
       </div>
     );
   }
 
-  // 2. Role Check (§7)
   const isRoleAllowed = !allowedRoles || allowedRoles.includes(role);
-
-  // 3. Permission Check (§29)
   const isPermissionAllowed = !requiredPermission || hasPermission(requiredPermission);
 
-  // 4. Unauthorized Access -> /403
   if (!isRoleAllowed || !isPermissionAllowed) {
     const handleGoHome = (targetHomePath: string) => {
       if (onNavigate) {
         onNavigate(targetHomePath);
       } else {
-        const home = ROLE_DEFAULT_PATHS[role] || "/dashboard";
-        window.location.href = home;
+        window.location.href = ROLE_DEFAULT_PATHS[role] || "/dashboard";
       }
     };
 
-    return (
-      <Forbidden403
-        role={role}
-        message={forbiddenMessage}
-        onGoHome={handleGoHome}
-      />
-    );
+    return <Forbidden403 role={role} message={forbiddenMessage} onGoHome={handleGoHome} />;
   }
 
-  // 5. Access Granted
   return <>{children}</>;
 };
 
 /**
- * Helper function to resolve default landing redirect based on UserRole (§7)
+ * Helper function to resolve default landing redirect based on UserRole
  */
 export function resolveRoleHomeRoute(role: UserRole): string {
   switch (role) {

@@ -201,6 +201,8 @@ export interface HeaderProps {
   actions?: ReactNode;
   scrolled?: boolean;
   breadcrumbs?: BreadcrumbItem[];
+  /** v2: vai trò hiện tại — Phụ huynh hiển thị nhãn "Cỡ chữ" cạnh nút Aa */
+  role?: UserRole;
 }
 
 export interface SidebarProps {
@@ -236,6 +238,10 @@ export interface AppShellProps {
   onNavigate?: (path: string) => void;
   breadcrumbs?: BreadcrumbItem[];
   headerActions?: ReactNode;
+  /** v2: xử lý đăng xuất (mặc định điều hướng /welcome) */
+  onLogout?: () => void;
+  /** v2: route thông báo theo vai trò cho nút chuông */
+  notificationPath?: string;
 }
 
 // ============================================================================
@@ -299,7 +305,7 @@ export interface LinkedStudent {
 export interface SubjectScoreSummary {
   subjectId: string;
   subjectName: string;
-  icon: string; // e.g. "📖", "✝️", "🕊️"
+  icon: string; // Tên icon Lucide hoặc chuỗi rỗng (không dùng emoji)
   averageScore: number;
   midtermScore: number | null; // GK
   finalScore: number | null; // CK

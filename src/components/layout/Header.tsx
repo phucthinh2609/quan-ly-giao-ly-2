@@ -1,33 +1,16 @@
-import React, { useState, useRef, useEffect } from "react";
-import {
-  ArrowLeft,
-  Bell,
-  Menu,
-  LogOut,
-  User as UserIcon,
-} from "lucide-react";
-import { HeaderProps, UserRole } from "../../types";
+import React, { useRef, useState } from "react";
+import { ArrowLeft, Bell, ChevronDown, LogOut } from "lucide-react";
+import { HeaderProps } from "../../types";
 import { Breadcrumb } from "./Breadcrumb";
-import { Avatar, Badge, IconButton, AvatarRole } from "../ui";
+import { TextSizeControl, ThemeToggle, useDismiss, usePopoverEnter } from "./PreferenceControls";
+import { Avatar, Badge, KitoVuaLogo } from "../ui";
+import { ROLE_LABELS } from "../../lib/format";
+import { cn } from "../../lib/cn";
 
-const ROLE_BADGE_CONFIG: Record<
-  UserRole,
-  { label: string; variant: "primary" | "warning" | "info" | "gold" | "neutral" }
-> = {
-  ADMIN: { label: "Admin", variant: "primary" },
-  GLV: { label: "GLV", variant: "gold" },
-  PARENT: { label: "Phụ huynh", variant: "info" },
-  STUDENT: { label: "Học sinh", variant: "neutral" },
-};
-
-function mapToAvatarRole(role?: UserRole): AvatarRole | undefined {
-  if (!role) return undefined;
-  if (role === "ADMIN") return "ADMIN";
-  if (role === "GLV") return "GLV";
-  if (role === "PARENT") return "PH";
-  if (role === "STUDENT") return "HS";
-  return undefined;
-}
+// ============================================================================
+// HEADER v2 (03 §6.2) — sticky glass.
+// Tiêu đề chỉ hiện khi cuộn (kiểu "large title"): tiêu đề lớn nằm trong nội dung trang.
+// ============================================================================
 
 export const Header: React.FC<HeaderProps> = ({
   title,
@@ -36,205 +19,156 @@ export const Header: React.FC<HeaderProps> = ({
   user,
   onBack,
   onNotificationClick,
-  onMobileMenuToggle,
   onLogout,
   actions,
   scrolled = false,
   breadcrumbs,
+  role,
 }) => {
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuWrapRef = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  useDismiss(menuOpen, () => setMenuOpen(false), menuWrapRef);
+  usePopoverEnter(menuOpen, menuPanelRef);
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target as Node)
-      ) {
-        setUserMenuOpen(false);
-      }
-    }
-    if (userMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [userMenuOpen]);
-
-  const roleInfo = user?.role ? ROLE_BADGE_CONFIG[user.role] : null;
+  const effectiveRole = role ?? user?.role;
+  const isParent = effectiveRole === "PARENT";
+  const hasBreadcrumbs = !!breadcrumbs && breadcrumbs.length > 1;
 
   return (
     <header
-      className={`sticky top-0 z-30 w-full bg-white transition-all duration-200 border-b ${
-        scrolled
-          ? "border-[#E7E5E4] shadow-sm bg-white/95 backdrop-blur-md"
-          : "border-[#E7E5E4] shadow-xs"
-      }`}
+      className={cn(
+        "sticky top-0 z-30 w-full border-b transition-[background-color,border-color,box-shadow] duration-300",
+        scrolled ? "border-line bg-canvas/80 backdrop-blur-xl" : "border-transparent bg-canvas"
+      )}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
-        {/* Left Section: Back / Mobile Menu + Title + Breadcrumbs */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {/* Mobile Menu Button (visible on mobile if onMobileMenuToggle provided) */}
-          {onMobileMenuToggle && !showBackButton && (
-            <button
-              type="button"
-              onClick={onMobileMenuToggle}
-              aria-label="Mở danh mục điều hướng"
-              className="md:hidden flex items-center justify-center w-11 h-11 -ml-1.5 rounded-[10px] text-[#57534E] hover:text-[#1C1917] hover:bg-[#F5F5F4] active:bg-[#E7E5E4] transition-colors cursor-pointer"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
-
-          {/* Back Button */}
-          {showBackButton && (
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
+        {/* Left: Back | Logo (mobile) + tiêu đề / breadcrumb */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+          {showBackButton ? (
             <button
               type="button"
               onClick={onBack}
-              aria-label="Quay về trang trước"
-              className="flex items-center justify-center w-11 h-11 -ml-1.5 rounded-[10px] text-[#57534E] hover:text-[#B4232C] hover:bg-[#FFF1F2] active:bg-[#FFE4E6] transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Quay lại trang trước"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink active:scale-95"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="size-5" aria-hidden="true" />
             </button>
+          ) : (
+            <span className="shrink-0 pl-1 lg:hidden">
+              <KitoVuaLogo size={32} showText={false} />
+            </span>
           )}
 
-          {/* Title Area & Breadcrumb Context */}
-          <div className="min-w-0 flex flex-col justify-center">
-            {breadcrumbs && breadcrumbs.length > 0 && (
-              <div className="hidden sm:block -mb-0.5">
-                <Breadcrumb items={breadcrumbs} />
+          <div className="relative min-w-0 flex-1">
+            {hasBreadcrumbs && (
+              <div
+                className={cn(
+                  "hidden transition-[opacity,transform] duration-300 lg:block",
+                  scrolled && "pointer-events-none -translate-y-1 opacity-0"
+                )}
+              >
+                <Breadcrumb items={breadcrumbs!} />
               </div>
             )}
-            <h1 className="text-[17px] sm:text-[20px] font-bold text-[#1C1917] font-serif tracking-tight truncate leading-tight">
+            <p
+              aria-hidden={!scrolled}
+              className={cn(
+                "truncate text-lg font-semibold tracking-tight text-ink transition-[opacity,transform] duration-300",
+                hasBreadcrumbs && "lg:absolute lg:inset-x-0 lg:top-1/2 lg:-translate-y-1/2",
+                scrolled ? "opacity-100" : "translate-y-1 opacity-0"
+              )}
+            >
               {title}
-            </h1>
+            </p>
           </div>
         </div>
 
-        {/* Right Section: Actions + Notifications + User Menu */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-          {/* Custom Action Slots */}
-          {actions && <div className="hidden sm:flex items-center gap-2">{actions}</div>}
+        {/* Right: actions · cỡ chữ · giao diện · thông báo · tài khoản */}
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+          {actions && <div className="mr-1 hidden items-center gap-2 md:flex">{actions}</div>}
 
-          {/* Notification Button with badge */}
-          <div className="relative">
-            <IconButton
-              aria-label={
-                notificationCount > 0
-                  ? `Thông báo (${notificationCount} tin mới)`
-                  : "Thông báo"
-              }
-              variant="ghost"
-              size="md"
-              onClick={onNotificationClick}
-              className="text-[#57534E] hover:text-[#B4232C] hover:bg-[#FFF1F2]"
-              icon={
-                <div className="relative">
-                  <Bell className="w-5 h-5" />
-                  {notificationCount > 0 && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-[#B4232C] text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-in zoom-in-50 duration-150"
-                    >
-                      {notificationCount > 99 ? "99+" : notificationCount}
-                    </span>
-                  )}
-                </div>
-              }
-            />
-          </div>
+          <TextSizeControl showLabel={isParent} />
+          <ThemeToggle className="hidden min-[400px]:inline-flex" />
 
-          {/* User Profile / Menu Dropdown */}
+          <button
+            type="button"
+            onClick={onNotificationClick}
+            aria-label={notificationCount > 0 ? `Thông báo, ${notificationCount} tin mới` : "Thông báo"}
+            title="Thông báo"
+            className="relative inline-flex size-11 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink active:scale-95"
+          >
+            <Bell className="size-5" aria-hidden="true" />
+            {notificationCount > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute top-1 right-0.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1 text-[0.625rem] leading-none font-bold text-on-primary ring-2 ring-canvas"
+              >
+                {notificationCount > 99 ? "99+" : notificationCount}
+              </span>
+            )}
+          </button>
+
           {user && (
-            <div className="relative" ref={userMenuRef}>
+            <div className="relative ml-0.5" ref={menuWrapRef}>
               <button
                 type="button"
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                aria-expanded={userMenuOpen}
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-expanded={menuOpen}
                 aria-haspopup="true"
-                aria-label={`Menu tài khoản: ${user.name} (${user.role})`}
-                className="flex items-center gap-2 p-1 sm:px-2 sm:py-1 rounded-[10px] hover:bg-[#F5F5F4] active:bg-[#E7E5E4] transition-colors cursor-pointer border border-transparent hover:border-[#E7E5E4] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B4232C]/30"
+                aria-label={`Tài khoản: ${user.name}`}
+                className={cn(
+                  "flex items-center gap-2 rounded-full p-0.5 transition-colors hover:bg-surface-2 lg:py-1 lg:pr-3 lg:pl-1",
+                  menuOpen && "bg-surface-2"
+                )}
               >
-                <Avatar
-                  name={user.name}
-                  size="sm"
-                  status="online"
-                  roleBadge={mapToAvatarRole(user.role)}
-                />
-                <div className="hidden lg:flex flex-col text-left">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-semibold text-[#1C1917] max-w-[130px] truncate leading-none">
-                      {user.christianName ? `${user.christianName} ` : ""}
-                      {user.name}
-                    </span>
-                    {roleInfo && (
-                      <Badge variant={roleInfo.variant} size="sm">
-                        {roleInfo.label}
-                      </Badge>
-                    )}
-                  </div>
-                  {user.email && (
-                    <span className="text-[11px] text-[#78716C] max-w-[140px] truncate mt-0.5">
-                      {user.email}
-                    </span>
-                  )}
-                </div>
+                <Avatar name={user.name} src={user.avatarUrl || undefined} size="sm" />
+                <span className="hidden max-w-36 truncate text-sm font-semibold text-ink lg:inline">{user.name}</span>
+                <ChevronDown className="hidden size-4 text-ink-3 lg:inline" aria-hidden="true" />
               </button>
 
-              {/* User Dropdown Menu */}
-              {userMenuOpen && (
+              {menuOpen && (
                 <div
+                  ref={menuPanelRef}
                   role="menu"
-                  aria-orientation="vertical"
-                  className="absolute right-0 mt-2 w-64 rounded-[12px] bg-white border border-[#E7E5E4] shadow-lg py-2 z-50 animate-in fade-in-50 zoom-in-95 duration-100"
+                  className="absolute right-0 z-50 mt-2 w-72 rounded-card border border-line bg-surface p-2 shadow-float"
                 >
-                  <div className="px-3.5 py-2.5 border-b border-[#F5F5F4] bg-[#FAFAF9]/50">
-                    <div className="font-semibold text-[14px] text-[#1C1917] truncate">
-                      {user.christianName ? `${user.christianName} ` : ""}
-                      {user.name}
-                    </div>
-                    <div className="text-[12px] text-[#78716C] truncate">{user.email}</div>
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      {roleInfo && (
-                        <Badge variant={roleInfo.variant} size="sm">
-                          Vai trò: {roleInfo.label}
+                  <div className="flex items-center gap-3 rounded-control bg-surface-2 p-3">
+                    <Avatar name={user.name} src={user.avatarUrl || undefined} size="md" />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-ink">{user.name}</p>
+                      {user.email && <p className="truncate text-sm text-ink-3">{user.email}</p>}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="night" size="sm">
+                          {ROLE_LABELS[user.role]}
                         </Badge>
-                      )}
-                      {user.assignedClass && (
-                        <span className="text-[11px] text-[#78716C] bg-white px-1.5 py-0.5 rounded border border-[#E7E5E4] truncate">
-                          {user.assignedClass}
-                        </span>
-                      )}
+                        {user.assignedClass && (
+                          <Badge variant="neutral" size="sm">
+                            {user.assignedClass}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="py-1">
-                    <div className="px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#A8A29E]">
-                      Tài khoản
-                    </div>
-                    <div className="px-3.5 py-1.5 text-[13px] text-[#57534E] flex items-center gap-2">
-                      <UserIcon className="w-4 h-4 text-[#78716C]" />
-                      <span>Mã: {user.id}</span>
-                    </div>
+                  <div className="mt-1 flex items-center justify-between rounded-control px-3 py-1 min-[400px]:hidden">
+                    <span className="text-sm font-medium text-ink-2">Giao diện</span>
+                    <ThemeToggle />
                   </div>
 
                   {onLogout && (
-                    <div className="pt-1 border-t border-[#F5F5F4]">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setUserMenuOpen(false);
-                          onLogout();
-                        }}
-                        className="w-full px-3.5 py-2 text-left text-[13px] font-medium text-[#C73A3A] hover:bg-[#FEF2F2] flex items-center gap-2 transition-colors cursor-pointer"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Đăng xuất</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="mt-1 flex min-h-12 w-full items-center gap-3 rounded-control px-3 text-left font-medium text-danger transition-colors hover:bg-danger-soft"
+                    >
+                      <LogOut className="size-5" aria-hidden="true" />
+                      Đăng xuất
+                    </button>
                   )}
                 </div>
               )}

@@ -1,6 +1,12 @@
 import React from "react";
-import { Check, X, FileCheck, Clock, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { AttendanceStatus, AttendanceSummaryData } from "../../types";
+import { cn } from "../../lib/cn";
+import { Card } from "../ui/Card";
+import { CountUp } from "../ui/CountUp";
+import { ProgressRing } from "../ui/ProgressRing";
+import { TONE_SOFT, TONE_TEXT, Tone } from "../ui/tone";
+import { ATTENDANCE_CYCLE, ATTENDANCE_STATUS_META, presentRateTone } from "./attendanceStatus";
 
 export interface AttendanceSummaryProps {
   summary: AttendanceSummaryData;
@@ -9,212 +15,103 @@ export interface AttendanceSummaryProps {
   className?: string;
 }
 
+const ACTIVE_RING: Partial<Record<Tone, string>> = {
+  success: "ring-success/40",
+  danger: "ring-danger/40",
+  info: "ring-info/40",
+  warning: "ring-warning/40",
+};
+
 /**
- * AttendanceSummary Component (§21 - 03_Component_Library)
- *
- * Hiển thị thống kê tổng quan buổi điểm danh:
- * - Tổng sĩ số
- * - Có mặt (PRESENT)
- * - Vắng (ABSENT)
- * - Có phép (EXCUSED)
- * - Đi muộn (LATE)
- * - Thanh tỷ lệ phần trăm chuyên cần trực quan
- * - Hỗ trợ nhấn để lọc nhanh danh sách học sinh theo trạng thái
+ * AttendanceSummary (03 §7): vòng tỷ lệ có mặt + 4 ô số đếm động.
+ * Có onFilterChange → mỗi ô là nút lọc nhanh danh sách (bấm lại để bỏ lọc).
  */
 export const AttendanceSummary: React.FC<AttendanceSummaryProps> = ({
   summary,
   activeFilter = "ALL",
   onFilterChange,
-  className = "",
+  className,
 }) => {
   const { total, present, absent, excused, late, presentRate } = summary;
+  const counts: Record<AttendanceStatus, number> = { PRESENT: present, ABSENT: absent, EXCUSED: excused, LATE: late };
+  const rate = Math.round(presentRate);
 
   return (
-    <div
-      className={`
-        p-4 sm:p-5 bg-white rounded-[16px] border border-[#E7E5E4] shadow-xs space-y-3.5
-        ${className}
-      `}
-    >
-      {/* Hàng 1: Tổng số & Tỷ lệ chuyên cần */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#F5F5F4]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-[#FAFAF9] border border-[#E7E5E4] flex items-center justify-center text-[#57534E]">
-            <Users className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="font-bold text-[16px] text-[#1C1917] font-serif">
-              Tổng quan sĩ số
-            </span>
-            <span className="text-[13px] text-[#78716C] ml-2">
-              (Tổng: <strong className="text-[#1C1917]">{total}</strong> học sinh)
-            </span>
-          </div>
-        </div>
+    <Card padding="md" className={cn("flex items-center gap-4 sm:gap-6", className)}>
+      <ProgressRing
+        value={presentRate}
+        max={100}
+        tone={presentRateTone(presentRate)}
+        size="md"
+        className="sm:size-24"
+        label={`Tỷ lệ có mặt ${rate}%`}
+      >
+        <CountUp value={rate} suffix="%" className="font-mono text-sm leading-none font-semibold text-ink sm:text-xl" />
+        <span className="mt-0.5 hidden text-xs text-ink-3 sm:block">có mặt</span>
+      </ProgressRing>
 
-        {/* Tỷ lệ có mặt */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="text-[13px] text-[#78716C]">Tỷ lệ có mặt:</span>
-          <span className="font-bold font-mono text-[16px] sm:text-[18px] text-[#168154]">
-            {presentRate.toFixed(1)}%
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <p className="flex items-center gap-1.5 text-sm text-ink-2">
+          <Users className="size-4 shrink-0 text-ink-3" aria-hidden="true" />
+          <span>
+            Sĩ số <span className="font-mono font-semibold text-ink">{total}</span> em
+            <span className="text-ink-3"> · </span>
+            <span className="font-mono font-semibold text-ink">{present}</span> có mặt
           </span>
+        </p>
+
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {ATTENDANCE_CYCLE.map((status) => {
+            const meta = ATTENDANCE_STATUS_META[status];
+            const Icon = meta.Icon;
+            const active = activeFilter === status;
+            const count = counts[status];
+
+            // Số + nhãn cùng dòng khi đủ chỗ; chữ lớn / màn hẹp thì nhãn tự xuống dòng (không cắt chữ)
+            const inner = (
+              <>
+                <CountUp value={count} className="font-mono text-lg leading-none font-semibold text-ink md:text-xl" />
+                <span className="flex items-center gap-1 text-xs font-medium whitespace-nowrap text-ink-2">
+                  <Icon className={cn("size-3.5 shrink-0", TONE_TEXT[meta.tone])} aria-hidden="true" />
+                  {meta.label}
+                </span>
+              </>
+            );
+
+            const tileClasses = cn(
+              "flex min-h-11 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-control px-3 py-2 text-left",
+              "md:min-h-15 md:flex-col md:flex-nowrap md:items-start md:justify-center",
+              active ? cn(TONE_SOFT[meta.tone], "ring-1 ring-inset", ACTIVE_RING[meta.tone]) : "bg-surface-2"
+            );
+
+            if (!onFilterChange) {
+              return (
+                <div key={status} className={tileClasses}>
+                  {inner}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={active}
+                aria-label={`${meta.label}: ${count} em${active ? ", đang lọc" : ". Bấm để lọc"}`}
+                onClick={() => onFilterChange(active ? "ALL" : status)}
+                className={cn(
+                  tileClasses,
+                  "transition-[background-color,box-shadow,transform] duration-150 ease-out-soft active:scale-[0.98]",
+                  "focus-visible:outline-3 focus-visible:outline-offset-2",
+                  !active && "hover:bg-surface-3"
+                )}
+              >
+                {inner}
+              </button>
+            );
+          })}
         </div>
       </div>
-
-      {/* Hàng 2: Thanh tiến trình phân bổ tỷ lệ màu trực quan */}
-      <div className="w-full bg-[#F5F5F4] h-3 rounded-full overflow-hidden flex" title={`Có mặt: ${present}, Vắng: ${absent}, Có phép: ${excused}, Đi muộn: ${late}`}>
-        {total > 0 && (
-          <>
-            {present > 0 && (
-              <div
-                style={{ width: `${(present / total) * 100}%` }}
-                className="bg-[#168154] transition-all duration-300"
-                title={`Có mặt: ${present}`}
-              />
-            )}
-            {absent > 0 && (
-              <div
-                style={{ width: `${(absent / total) * 100}%` }}
-                className="bg-[#DC4C4C] transition-all duration-300"
-                title={`Vắng: ${absent}`}
-              />
-            )}
-            {excused > 0 && (
-              <div
-                style={{ width: `${(excused / total) * 100}%` }}
-                className="bg-[#D9901A] transition-all duration-300"
-                title={`Có phép: ${excused}`}
-              />
-            )}
-            {late > 0 && (
-              <div
-                style={{ width: `${(late / total) * 100}%` }}
-                className="bg-[#EA580C] transition-all duration-300"
-                title={`Đi muộn: ${late}`}
-              />
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Hàng 3: 4 Thẻ đếm chi tiết (Có thể click để lọc nhanh) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-        {/* Có mặt */}
-        <button
-          type="button"
-          onClick={() => onFilterChange && onFilterChange(activeFilter === "PRESENT" ? "ALL" : "PRESENT")}
-          className={`
-            flex items-center justify-between p-2.5 sm:p-3 rounded-[12px] border text-left transition-all
-            cursor-pointer min-h-[48px]
-            ${
-              activeFilter === "PRESENT"
-                ? "bg-[#ECFDF3] border-[#168154] ring-1 ring-[#168154]"
-                : "bg-[#FAFAF9] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-            }
-          `}
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-[#168154] text-white flex items-center justify-center shrink-0">
-              <Check className="w-3.5 h-3.5 stroke-[3]" />
-            </span>
-            <span className="text-[13px] font-semibold text-[#57534E]">Có mặt</span>
-          </div>
-          <span className="font-bold font-mono text-[16px] text-[#168154]">
-            {present}
-          </span>
-        </button>
-
-        {/* Vắng */}
-        <button
-          type="button"
-          onClick={() => onFilterChange && onFilterChange(activeFilter === "ABSENT" ? "ALL" : "ABSENT")}
-          className={`
-            flex items-center justify-between p-2.5 sm:p-3 rounded-[12px] border text-left transition-all
-            cursor-pointer min-h-[48px]
-            ${
-              activeFilter === "ABSENT"
-                ? "bg-[#FEF2F2] border-[#DC4C4C] ring-1 ring-[#DC4C4C]"
-                : "bg-[#FAFAF9] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-            }
-          `}
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-[#DC4C4C] text-white flex items-center justify-center shrink-0">
-              <X className="w-3.5 h-3.5 stroke-[3]" />
-            </span>
-            <span className="text-[13px] font-semibold text-[#57534E]">Vắng</span>
-          </div>
-          <span className="font-bold font-mono text-[16px] text-[#DC4C4C]">
-            {absent}
-          </span>
-        </button>
-
-        {/* Có phép */}
-        <button
-          type="button"
-          onClick={() => onFilterChange && onFilterChange(activeFilter === "EXCUSED" ? "ALL" : "EXCUSED")}
-          className={`
-            flex items-center justify-between p-2.5 sm:p-3 rounded-[12px] border text-left transition-all
-            cursor-pointer min-h-[48px]
-            ${
-              activeFilter === "EXCUSED"
-                ? "bg-[#FFF8E7] border-[#D9901A] ring-1 ring-[#D9901A]"
-                : "bg-[#FAFAF9] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-            }
-          `}
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-[#D9901A] text-white flex items-center justify-center shrink-0">
-              <FileCheck className="w-3.5 h-3.5 stroke-[2.5]" />
-            </span>
-            <span className="text-[13px] font-semibold text-[#57534E]">Có phép</span>
-          </div>
-          <span className="font-bold font-mono text-[16px] text-[#B86F08]">
-            {excused}
-          </span>
-        </button>
-
-        {/* Đi muộn */}
-        <button
-          type="button"
-          onClick={() => onFilterChange && onFilterChange(activeFilter === "LATE" ? "ALL" : "LATE")}
-          className={`
-            flex items-center justify-between p-2.5 sm:p-3 rounded-[12px] border text-left transition-all
-            cursor-pointer min-h-[48px]
-            ${
-              activeFilter === "LATE"
-                ? "bg-[#FFF7ED] border-[#EA580C] ring-1 ring-[#EA580C]"
-                : "bg-[#FAFAF9] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-            }
-          `}
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-[#EA580C] text-white flex items-center justify-center shrink-0">
-              <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
-            </span>
-            <span className="text-[13px] font-semibold text-[#57534E]">Đi muộn</span>
-          </div>
-          <span className="font-bold font-mono text-[16px] text-[#C2410C]">
-            {late}
-          </span>
-        </button>
-      </div>
-
-      {/* Filter indicator nếu đang bật lọc */}
-      {activeFilter !== "ALL" && (
-        <div className="flex items-center justify-between text-[12px] bg-[#F5F5F4] px-3 py-1.5 rounded-[8px]">
-          <span className="text-[#57534E]">
-            Đang lọc danh sách theo: <strong className="text-[#1C1917]">{activeFilter}</strong>
-          </span>
-          <button
-            type="button"
-            onClick={() => onFilterChange && onFilterChange("ALL")}
-            className="text-[#B4232C] font-semibold hover:underline cursor-pointer"
-          >
-            Hiện tất cả
-          </button>
-        </div>
-      )}
-    </div>
+    </Card>
   );
 };

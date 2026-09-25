@@ -1,8 +1,14 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { AlertCircle, CheckCircle2, ClipboardList, PenLine, RotateCcw, WifiOff } from "lucide-react";
 import { ScoreSaveState } from "../../types";
 import { Button } from "../ui/Button";
+import { IconButton } from "../ui/IconButton";
 import { Spinner } from "../ui/Spinner";
-import { Check, AlertCircle, AlertTriangle, Save, RotateCcw } from "lucide-react";
+import { ProgressRing } from "../ui/ProgressRing";
+import { useToastOffset } from "../ui/Toast";
+import { Tone } from "../ui/tone";
+import { cn } from "../../lib/cn";
+import { celebrate } from "../../lib/motion";
 
 export interface ScoreSaveBarProps {
   state: ScoreSaveState;
@@ -12,16 +18,21 @@ export interface ScoreSaveBarProps {
   onSave: () => void;
   onReset?: () => void;
   className?: string;
+  /** Số em đã có điểm hợp lệ — hiển thị "25/28 đã nhập" */
+  enteredCount?: number;
+  /** Số điểm lỗi — hiển thị "· 2 lỗi" */
+  errorCount?: number;
+  /**
+   * Cho phép bấm Lưu khi còn lỗi (cha tự xử lý: báo lỗi + đưa tới ô lỗi đầu tiên).
+   * Mặc định false: nút Lưu bị khóa khi còn lỗi (hành vi v1).
+   */
+  allowSaveWithErrors?: boolean;
 }
 
 /**
- * ScoreSaveBar Component (§22 - 03_Component_Library.md & Sitemap §9)
- *
- * Yêu cầu:
- * - Đủ 5 state: NO_CHANGES, DIRTY, SAVING, SAVED, ERROR
- * - Hiển thị đúng số lượng thay đổi chưa lưu (e.g. "5 thay đổi chưa lưu")
- * - Cảnh báo: "⚠ Có thay đổi chưa lưu" khi có draft
- * - Nếu có lỗi validation (hasErrors = true) -> nút Lưu bị vô hiệu hóa kèm tooltip/thông báo
+ * Thanh lưu nổi (03 §8, như AttendanceSaveBar): nằm trên bottom nav ở mobile,
+ * góc dưới phải ở desktop. State: NO_CHANGES · DIRTY · SAVING · SAVED · ERROR.
+ * Tự đẩy vùng toast lên trên, tự thêm khoảng trống cuối trang, ăn mừng khi lưu xong.
  */
 export const ScoreSaveBar: React.FC<ScoreSaveBarProps> = ({
   state,
@@ -31,126 +42,175 @@ export const ScoreSaveBar: React.FC<ScoreSaveBarProps> = ({
   onSave,
   onReset,
   className = "",
+  enteredCount,
+  errorCount,
+  allowSaveWithErrors = false,
 }) => {
+  useToastOffset("11rem", "7.5rem");
+
+  const barRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const prevState = useRef<ScoreSaveState>(state);
+
   const isSaving = state === "SAVING";
-  const isSaved = state === "SAVED";
   const isError = state === "ERROR";
-  const isDirty = state === "DIRTY" || dirtyCount > 0;
-  const isNoChanges = state === "NO_CHANGES" && dirtyCount === 0;
+  const isDirty = !isSaving && !isError && (state === "DIRTY" || dirtyCount > 0);
+  const isSaved = state === "SAVED" && dirtyCount === 0;
+  const isNoChanges = !isSaving && !isError && !isDirty && !isSaved;
+  const errors = errorCount ?? (hasErrors ? 1 : 0);
+  const showErrors = hasErrors || errors > 0;
+
+  // Ăn mừng khi vừa lưu xong
+  useEffect(() => {
+    if (prevState.current === "SAVING" && state === "SAVED") {
+      celebrate(buttonRef.current);
+    }
+    prevState.current = state;
+  }, [state]);
+
+  // Công bố chiều cao thanh để dải điền nhanh nằm ngay phía trên
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty("--score-savebar-h", `${el.offsetHeight}px`);
+    update();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    observer?.observe(el);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty("--score-savebar-h");
+    };
+  }, []);
+
+  let tone: Tone = "neutral";
+  let statusIcon: React.ReactNode = <ClipboardList />;
+  let subtitle: React.ReactNode = "Chưa có thay đổi";
+  let subtitleClass = "text-ink-3";
+
+  if (isSaving) {
+    tone = "primary";
+    statusIcon = <Spinner size="xs" color="current" />;
+    subtitle = "Đang lưu...";
+  } else if (isError) {
+    tone = "danger";
+    statusIcon = <WifiOff />;
+    subtitle = "Chưa lưu được, điểm vẫn còn trên máy";
+    subtitleClass = "text-danger";
+  } else if (isDirty && showErrors) {
+    tone = "danger";
+    statusIcon = <AlertCircle />;
+    subtitle = errorCount !== undefined ? `Sửa ${errorCount} lỗi trước khi lưu` : "Sửa lỗi trước khi lưu";
+    subtitleClass = "text-danger";
+  } else if (isDirty) {
+    tone = "warning";
+    statusIcon = <PenLine />;
+    subtitle = (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="size-2 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+        <span>
+          <span className="font-mono tabular-nums">{dirtyCount}</span> thay đổi chưa lưu
+        </span>
+      </span>
+    );
+    subtitleClass = "text-ink-2";
+  } else if (isSaved) {
+    tone = "success";
+    statusIcon = <CheckCircle2 />;
+    subtitle = "Đã lưu tất cả";
+    subtitleClass = "text-success";
+  }
+
+  const saveDisabled =
+    isSaving || isNoChanges || isSaved || (!allowSaveWithErrors && hasErrors && !isError);
 
   return (
-    <div
-      role="toolbar"
-      aria-label="Thanh lưu bảng điểm"
-      className={`
-        sticky bottom-0 z-30 w-full bg-white border-t-2 border-[#E7E5E4] px-4 py-3 sm:px-6 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]
-        transition-all duration-200
-        ${isDirty ? "bg-[#FFFBEB] border-[#FDE68A]" : ""}
-        ${isError ? "bg-[#FEF2F2] border-[#FECDD3]" : ""}
-        ${isSaved ? "bg-[#F0FDF4] border-[#BBF7D0]" : ""}
-        ${className}
-      `}
-    >
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Left Side: Status & Counts */}
+    <>
+      {/* Khoảng trống cuối trang để hàng cuối không bị thanh nổi che */}
+      <div aria-hidden="true" className="h-28 lg:h-12" />
+
+      <div
+        ref={barRef}
+        role="region"
+        aria-label="Lưu bảng điểm"
+        className={cn(
+          "@container fixed inset-x-3 bottom-[calc(5.75rem_+_env(safe-area-inset-bottom))] z-40",
+          "lg:bottom-6 lg:left-auto lg:right-6 lg:w-[30rem]",
+          "rounded-card border border-line bg-surface/90 p-3 pl-4 shadow-float backdrop-blur-xl",
+          className
+        )}
+      >
         <div className="flex items-center gap-3">
-          {/* Status Badge */}
-          {isSaving && (
-            <div className="flex items-center gap-2 text-[#B4232C] font-semibold text-[14px]">
-              <Spinner size="sm" className="text-[#B4232C]" />
-              <span>Đang lưu bảng điểm lên hệ thống...</span>
-            </div>
+          {enteredCount !== undefined ? (
+            <ProgressRing
+              value={enteredCount}
+              max={Math.max(totalCount, 1)}
+              tone={tone === "neutral" ? "primary" : tone}
+              size="sm"
+              thickness={12}
+              label="Tiến độ nhập điểm"
+              className="hidden shrink-0 @md:inline-flex"
+            >
+              <span className="flex text-ink-2 [&_svg]:size-4" aria-hidden="true">
+                {statusIcon}
+              </span>
+            </ProgressRing>
+          ) : (
+            <span
+              className="hidden size-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2 @md:inline-flex [&_svg]:size-5"
+              aria-hidden="true"
+            >
+              {statusIcon}
+            </span>
           )}
 
-          {isSaved && !isDirty && (
-            <div className="flex items-center gap-2 text-[#168154] font-semibold text-[14px]">
-              <div className="w-6 h-6 rounded-full bg-[#DCFCE7] text-[#168154] flex items-center justify-center">
-                <Check className="w-4 h-4" />
-              </div>
-              <span>Đã lưu thành công tất cả điểm</span>
-            </div>
-          )}
-
-          {isError && (
-            <div className="flex items-center gap-2 text-[#DC4C4C] font-semibold text-[14px]">
-              <AlertCircle className="w-5 h-5 text-[#DC4C4C] flex-shrink-0" />
-              <div>
-                <span>Lưu không thành công! </span>
-                <span className="text-[12px] font-normal text-[#57534E]">
-                  (Dữ liệu vừa nhập vẫn được giữ nguyên an toàn, vui lòng thử lại)
+          <div className="min-w-0 flex-1" aria-live="polite">
+            <p className="truncate text-sm font-semibold text-ink">
+              {enteredCount !== undefined ? (
+                <>
+                  <span className="font-mono tabular-nums">
+                    {enteredCount}/{totalCount}
+                  </span>{" "}
+                  đã nhập
+                </>
+              ) : (
+                <>
+                  <span className="font-mono tabular-nums">{totalCount}</span> học sinh
+                </>
+              )}
+              {showErrors && errorCount !== undefined && errorCount > 0 && (
+                <span className="text-danger">
+                  {" "}
+                  · <span className="font-mono tabular-nums">{errorCount}</span> lỗi
                 </span>
-              </div>
-            </div>
-          )}
+              )}
+            </p>
+            <p className={cn("truncate text-xs font-medium", subtitleClass)}>{subtitle}</p>
+          </div>
 
-          {isDirty && !isSaving && !isError && (
-            <div className="flex items-center gap-2 text-[#92400E] font-semibold text-[14px]">
-              <AlertTriangle className="w-5 h-5 text-[#D97706] flex-shrink-0" />
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold">⚠ Có thay đổi chưa lưu</span>
-                <span className="text-[#78716C] hidden sm:inline">•</span>
-                <span className="bg-[#FEF3C7] text-[#92400E] px-2 py-0.5 rounded-[6px] border border-[#FDE68A] font-bold">
-                  {dirtyCount}/{totalCount} thay đổi chưa lưu
-                </span>
-              </div>
-            </div>
-          )}
-
-          {isNoChanges && (
-            <div className="text-[13px] text-[#78716C]">
-              Chưa có thay đổi mới nào trên bảng điểm ({totalCount} học sinh)
-            </div>
-          )}
-        </div>
-
-        {/* Right Side: Action Buttons */}
-        <div className="flex items-center gap-2.5 justify-end">
-          {/* Reset button if dirty */}
-          {isDirty && onReset && (
-            <Button
-              variant="outline"
+          {onReset && (isDirty || isError) && (
+            <IconButton
+              aria-label="Hủy thay đổi"
+              variant="ghost"
               size="md"
-              leftIcon={<RotateCcw className="w-4 h-4 text-[#78716C]" />}
+              icon={<RotateCcw />}
               onClick={onReset}
               disabled={isSaving}
-              className="text-[#57534E]"
-            >
-              Hủy thay đổi
-            </Button>
+            />
           )}
 
-          {/* Save Button */}
           <Button
-            variant={isError ? "danger" : "primary"}
-            size="lg"
-            leftIcon={
-              isSaving ? (
-                <Spinner size="sm" className="text-white" />
-              ) : isError ? (
-                <RotateCcw className="w-4 h-4" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )
-            }
+            ref={buttonRef}
+            variant="primary"
             onClick={onSave}
-            disabled={isSaving || (isNoChanges && !isError) || hasErrors}
-            className={`
-              !min-h-[48px] px-6 font-bold shadow-sm whitespace-nowrap cursor-pointer
-              ${hasErrors ? "opacity-60 cursor-not-allowed" : ""}
-            `}
+            loading={isSaving}
+            disabled={saveDisabled}
+            className="px-4"
           >
-            {isSaving
-              ? "Đang lưu..."
-              : isError
-              ? "Thử lưu lại"
-              : hasErrors
-              ? "Sửa lỗi để lưu"
-              : isDirty
-              ? `Lưu ${dirtyCount} điểm mới`
-              : "Lưu tất cả"}
+            {isError ? "Thử lại" : "Lưu tất cả"}
           </Button>
         </div>
       </div>
-    </div>
+    </>
   );
 };

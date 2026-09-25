@@ -1,24 +1,37 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Users,
-  School,
-  UserCheck,
+  AlertTriangle,
+  ArrowRight,
   CalendarCheck,
-  TrendingUp,
-  Download,
-  Filter,
-  RefreshCw,
+  CalendarClock,
   CheckCircle2,
-  XCircle,
+  ChevronRight,
   Clock,
-  BarChart3,
+  Download,
+  FileCheck2,
+  GraduationCap,
+  School,
+  TrendingUp,
+  UserCheck,
+  XCircle,
 } from "lucide-react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { KPIGroup, ChartCard, ChartCardStatus, ActivityFeed } from "../../components/dashboard";
+import { Card } from "../../components/ui/Card";
+import { CountUp } from "../../components/ui/CountUp";
+import { ProgressBar } from "../../components/ui/ProgressBar";
+import { ProgressRing } from "../../components/ui/ProgressRing";
+import { SegmentedControl, SegmentedOption } from "../../components/ui/SegmentedControl";
+import { TONE_SOFT, TONE_TEXT, Tone } from "../../components/ui/tone";
+import { useToast } from "../../components/ui/Toast";
+import { KPIGroup, ChartCard, ChartCardStatus, ActivityFeed, SectionHeader } from "../../components/dashboard";
 import { ClassCard } from "../../components/class/ClassCard";
-import { NotificationPreview } from "../../components/notification/NotificationPreview";
+import { useAuth } from "../../context/AuthContext";
+import { usePreferences } from "../../context/PreferencesContext";
+import { cn } from "../../lib/cn";
+import { givenName, greeting } from "../../lib/format";
+import { useReveal } from "../../lib/motion";
 import {
   MOCK_CLASSES,
   MOCK_ADMIN_ACTIVITIES,
@@ -30,371 +43,398 @@ export interface AdminDashboardProps {
   className?: string;
 }
 
+interface StatusTile {
+  key: string;
+  label: string;
+  value: number;
+  tone: Tone;
+  icon: React.ReactNode;
+}
+
+interface ScoreBand {
+  label: string;
+  range: string;
+  count: number;
+  tone: Tone;
+}
+
+// Phân bố điểm học kỳ I (dữ liệu mẫu) — tổng 175 em, khớp sĩ số toàn đoàn
+const SCORE_BANDS: ScoreBand[] = [
+  { label: "Xuất sắc", range: "9,0 – 10", count: 48, tone: "success" },
+  { label: "Giỏi", range: "8,0 – 8,9", count: 76, tone: "info" },
+  { label: "Khá", range: "6,5 – 7,9", count: 38, tone: "grape" },
+  { label: "Đạt", range: "5,0 – 6,4", count: 10, tone: "warning" },
+  { label: "Cần cố gắng", range: "dưới 5,0", count: 3, tone: "primary" },
+];
+
+const CHART_STATUS_OPTIONS: SegmentedOption<ChartCardStatus>[] = [
+  { value: "ready", label: "Sẵn sàng" },
+  { value: "loading", label: "Đang tải" },
+  { value: "empty", label: "Trống" },
+  { value: "error", label: "Lỗi" },
+];
+
+const formatPercent = (value: number, decimals = 1) =>
+  value.toLocaleString("vi-VN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
 /**
- * AdminDashboard (§30 03_Component_Library & Wireframe A + Admin Responsive §4–5)
- *
- * CÂY THÀNH PHẦN BẮT BUỘC:
- * <AdminDashboard>
- * ├── <PageHeader />
- * ├── <KPIGroup />
- * ├── <AttendanceChartCard />
- * ├── <ScoreChartCard />
- * ├── <ClassOverview />
- * ├── <ActivityFeed />
- * └── <NotificationPreview />
- *
- * TUÂN THỦ RULE-015:
- * Tuyệt đối KHÔNG chứa thành phần Gamification (AchievementBadge, XPProgress, game-*).
+ * AdminDashboard (04 §6, B-AD-01) — bento gapless, KPI đếm số động.
  */
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  onNavigate,
-  className = "",
-}) => {
-  // ChartCard state controllers for interactive review & testing (Loading/Ready/Empty/Error)
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, className }) => {
+  const { user } = useAuth();
+  const { demoMode } = usePreferences();
+  const toast = useToast();
+  const revealRef = useReveal<HTMLDivElement>();
+
   const [attendanceChartStatus, setAttendanceChartStatus] = useState<ChartCardStatus>("ready");
   const [scoreChartStatus, setScoreChartStatus] = useState<ChartCardStatus>("ready");
-  const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>("ALL");
+  const [exporting, setExporting] = useState(false);
+  const exportTimer = useRef<number | undefined>(undefined);
 
-  // Filter classes by grade
-  const filteredClasses = MOCK_CLASSES.filter((c) => {
-    if (selectedGradeFilter === "ALL") return true;
-    return c.grade.includes(selectedGradeFilter);
-  });
+  useEffect(() => () => window.clearTimeout(exportTimer.current), []);
 
-  // Calculate high-level aggregates
-  const totalStudents = MOCK_CLASSES.reduce((acc, c) => acc + c.studentCount, 0);
-  const totalPresentToday = MOCK_CLASSES.reduce((acc, c) => acc + c.presentCount, 0);
-  const averageAttendanceRate = Math.round((totalPresentToday / totalStudents) * 100);
+  const go = (path: string) => onNavigate?.(path);
+
+  // ---- Tổng hợp số liệu ----------------------------------------------------
+  const classes = MOCK_CLASSES;
+  const totalStudents = classes.reduce((acc, c) => acc + c.studentCount, 0);
+  const totalPresent = classes.reduce((acc, c) => acc + c.presentCount, 0);
+  const attendanceRate = totalStudents > 0 ? Math.round((totalPresent / totalStudents) * 100) : 0;
+  const notPresent = Math.max(0, totalStudents - totalPresent);
+  const excused = Math.min(5, notPresent);
+  const late = Math.min(3, notPresent - excused);
+  const absent = Math.max(0, notPresent - excused - late);
+
+  const attendanceTiles: StatusTile[] = [
+    { key: "present", label: "Có mặt", value: totalPresent, tone: "success", icon: <CheckCircle2 /> },
+    { key: "absent", label: "Vắng", value: absent, tone: "danger", icon: <XCircle /> },
+    { key: "excused", label: "Có phép", value: excused, tone: "info", icon: <FileCheck2 /> },
+    { key: "late", label: "Đi muộn", value: late, tone: "warning", icon: <Clock /> },
+  ];
+
+  const scoreTotal = SCORE_BANDS.reduce((acc, b) => acc + b.count, 0);
+  const passCount = SCORE_BANDS.filter((b) => b.tone !== "primary").reduce((acc, b) => acc + b.count, 0);
+  const passRate = scoreTotal > 0 ? (passCount / scoreTotal) * 100 : 0;
+
+  const lowAttendanceClasses = [...classes]
+    .filter((c) => c.attendanceRate < 90)
+    .sort((a, b) => a.attendanceRate - b.attendanceRate);
+  const upcomingDeadline = MOCK_ADMIN_NOTIFICATIONS.find((n) => n.type === "SYSTEM");
+  const overviewClasses = classes.slice(0, 4);
+
+  const handleExport = () => {
+    setExporting(true);
+    window.clearTimeout(exportTimer.current);
+    exportTimer.current = window.setTimeout(() => {
+      setExporting(false);
+      toast.success("Đã xuất báo cáo tổng hợp toàn đoàn (Excel).");
+    }, 900);
+  };
+
+  const title = user?.name ? `${greeting()}, ${givenName(user.name)}` : greeting();
 
   return (
-    <div className={`space-y-6 sm:space-y-7 pb-10 ${className}`}>
-      {/* =================================================================== */}
-      {/* 1. PageHeader (§14, §30) */}
-      {/* =================================================================== */}
+    <div className={cn("space-y-6", className)}>
       <PageHeader
-        title="Bảng điều khiển Quản trị"
-        description="Tổng quan tình hình sinh hoạt, học tập và chuyên cần toàn Xứ đoàn Kitô Vua"
-        badge={<Badge variant="primary" dot>Niên khóa 2026 - 2027</Badge>}
+        title={title}
+        description="Tổng quan Đoàn Kitô Vua · Năm học 2026–2027"
         actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<Download className="w-4 h-4" />}
-              onClick={() => alert("Xuất báo cáo tổng hợp toàn đoàn (Excel)")}
-            >
-              Xuất báo cáo
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<RefreshCw className="w-4 h-4" />}
-              onClick={() => {
-                setAttendanceChartStatus("ready");
-                setScoreChartStatus("ready");
-              }}
-            >
-              Làm mới
-            </Button>
-          </div>
+          <Button leftIcon={<Download />} loading={exporting} onClick={handleExport}>
+            Xuất báo cáo
+          </Button>
         }
       />
 
-      {/* =================================================================== */}
-      {/* 2. KPIGroup (§25, Wireframe A §4–5) */}
-      {/* Mobile 1 col → Tablet 2 cols → Desktop 4 cols */}
-      {/* =================================================================== */}
-      <section aria-label="Chỉ số chính toàn xứ đoàn">
-        <KPIGroup
-          title="Chỉ số hoạt động toàn xứ đoàn"
-          items={[
-            {
-              title: "Tổng học sinh",
-              value: "175",
-              icon: <Users className="w-5 h-5 text-[#B4232C]" />,
-              trend: "+8 học sinh so với HK trước",
-              trendType: "positive",
-              subtitle: "Đang sinh hoạt tại 6 phân đoàn",
-              onClick: () => onNavigate && onNavigate("/admin/users"),
-            },
-            {
-              title: "Lớp giáo lý",
-              value: "6",
-              icon: <School className="w-5 h-5 text-[#2563EB]" />,
-              trend: "100% đã phân công GLV",
-              trendType: "positive",
-              subtitle: "Khai Tâm đến Bao Đồng",
-              onClick: () => onNavigate && onNavigate("/admin/classes"),
-            },
-            {
-              title: "Giáo lý viên",
-              value: "18",
-              icon: <UserCheck className="w-5 h-5 text-[#168154]" />,
-              trend: "Đầy đủ huynh trưởng trực nhật",
-              trendType: "neutral",
-              subtitle: "Tỷ lệ 1 GLV / 10 học sinh",
-              onClick: () => onNavigate && onNavigate("/admin/users"),
-            },
-            {
-              title: "Chuyên cần hôm nay",
-              value: `${averageAttendanceRate}%`,
-              icon: <CalendarCheck className="w-5 h-5 text-[#B86F08]" />,
-              trend: "+2% so với Chúa Nhật trước",
-              trendType: "positive",
-              subtitle: `${totalPresentToday}/${totalStudents} em có mặt hôm nay`,
-              onClick: () => onNavigate && onNavigate("/teacher/attendance"),
-            },
-          ]}
-        />
-      </section>
-
-      {/* State Switcher for ChartCard Verification (Testing states: Loading / Ready / Empty / Error) */}
-      <div className="bg-[#FAFAF9] rounded-xl border border-[#E7E5E4] p-3 text-[12px] text-[#57534E] flex flex-wrap items-center justify-between gap-2.5">
-        <span className="font-semibold text-[#1C1917] flex items-center gap-1.5">
-          <BarChart3 className="w-4 h-4 text-[#78716C]" />
-          Kiểm thử trạng thái ChartCard (§25 Loading / Ready / Empty / Error):
-        </span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[#78716C]">Điểm danh:</span>
-          {(["ready", "loading", "empty", "error"] as ChartCardStatus[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setAttendanceChartStatus(s)}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors cursor-pointer capitalize ${
-                attendanceChartStatus === s
-                  ? "bg-[#B4232C] text-white border-[#B4232C]"
-                  : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-          <span className="text-[#78716C] ml-2">Học tập:</span>
-          {(["ready", "loading", "empty", "error"] as ChartCardStatus[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setScoreChartStatus(s)}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors cursor-pointer capitalize ${
-                scoreChartStatus === s
-                  ? "bg-[#2563EB] text-white border-[#2563EB]"
-                  : "bg-white text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* =================================================================== */}
-      {/* 3 & 4. CHARTS SECTION (Desktop: 2 columns, Mobile: 1 column) */}
-      {/* ├── <AttendanceChartCard /> */}
-      {/* └── <ScoreChartCard /> */}
-      {/* =================================================================== */}
-      <section aria-label="Biểu đồ chuyên cần và học tập" className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-        {/* 3. AttendanceChartCard */}
-        <ChartCard
-          title="Điểm danh hôm nay"
-          subtitle="Tỷ lệ hiện diện Chúa Nhật 24/09/2026"
-          status={attendanceChartStatus}
-          onRetry={() => setAttendanceChartStatus("ready")}
-          badge={
-            <Badge variant="success" size="sm">
-              Có mặt: {averageAttendanceRate}%
-            </Badge>
-          }
-          action={
-            <span className="text-[12px] text-[#78716C] font-mono bg-[#FAFAF9] px-2 py-1 rounded border border-[#E7E5E4]">
-              Chúa Nhật XXV TN
-            </span>
-          }
-        >
-          <div className="space-y-4 py-2">
-            {/* Visual Attendance Bar */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="font-semibold text-[#1C1917]">Tiến độ điểm danh toàn đoàn</span>
-                <span className="font-bold text-[#168154]">{totalPresentToday} / {totalStudents} học sinh</span>
-              </div>
-              <div className="w-full h-4 bg-[#E7E5E4] rounded-full overflow-hidden flex">
-                <div
-                  className="bg-[#22A06B] h-full transition-all duration-700"
-                  style={{ width: `${(totalPresentToday / totalStudents) * 100}%` }}
-                  title="Có mặt"
-                />
-                <div
-                  className="bg-[#FCD34D] h-full transition-all duration-700"
-                  style={{ width: "6%" }}
-                  title="Có phép"
-                />
-                <div
-                  className="bg-[#DC4C4C] h-full transition-all duration-700"
-                  style={{ width: "5%" }}
-                  title="Vắng"
-                />
-              </div>
-            </div>
-
-            {/* Attendance breakdown pills (Wireframe A §4–5) */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#F5F5F4] text-center">
-              <div className="p-2.5 rounded-xl bg-[#ECFDF3] border border-[#D1FAE5]">
-                <div className="text-[18px] font-bold text-[#168154] font-serif">{totalPresentToday}</div>
-                <div className="text-[12px] text-[#146C47] font-medium flex items-center justify-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Có mặt
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#FFF8E7] border border-[#FEF0C7]">
-                <div className="text-[18px] font-bold text-[#B86F08] font-serif">6</div>
-                <div className="text-[12px] text-[#925A0A] font-medium flex items-center justify-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Có phép
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#FEF2F2] border border-[#FEE2E2]">
-                <div className="text-[18px] font-bold text-[#DC4C4C] font-serif">9</div>
-                <div className="text-[12px] text-[#A52D2D] font-medium flex items-center justify-center gap-1">
-                  <XCircle className="w-3.5 h-3.5" /> Vắng
-                </div>
-              </div>
-            </div>
-
-            <p className="text-[12px] text-[#78716C] italic pt-1">
-              Ghi chú: Đã có 6/6 lớp hoàn tất điểm danh lúc 08:30 sáng Chúa Nhật.
-            </p>
-          </div>
-        </ChartCard>
-
-        {/* 4. ScoreChartCard */}
-        <ChartCard
-          title="Kết quả học tập toàn đoàn"
-          subtitle="Điểm trung bình học kỳ I (Thang điểm 10)"
-          status={scoreChartStatus}
-          onRetry={() => setScoreChartStatus("ready")}
-          badge={
-            <Badge variant="gold" size="sm">
-              Điểm TB: 8.2
-            </Badge>
-          }
-          action={
-            <span className="text-[12px] font-semibold text-[#168154] flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5" /> +0.4đ
-            </span>
-          }
-        >
-          <div className="space-y-4 py-2">
-            {/* Distribution bars */}
-            <div className="space-y-2">
-              {[
-                { label: "Xuất sắc (9.0 - 10)", count: 48, percentage: 27, color: "bg-[#E3B341]" },
-                { label: "Giỏi (8.0 - 8.9)", count: 76, percentage: 43, color: "bg-[#22A06B]" },
-                { label: "Khá (6.5 - 7.9)", count: 38, percentage: 22, color: "bg-[#3B82F6]" },
-                { label: "Đạt (5.0 - 6.4)", count: 13, percentage: 8, color: "bg-[#D9901A]" },
-              ].map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-[12.5px]">
-                    <span className="text-[#44403C] font-medium">{item.label}</span>
-                    <span className="font-semibold text-[#1C1917]">
-                      {item.count} em ({item.percentage}%)
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-[#F5F5F4] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${item.color} transition-all duration-700`}
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-2 border-t border-[#F5F5F4] flex items-center justify-between text-[12px] text-[#78716C]">
-              <span>Tỷ lệ hoàn thành môn Giáo lý & Kinh Thánh:</span>
-              <span className="font-bold text-[#1C1917]">98.3%</span>
-            </div>
-          </div>
-        </ChartCard>
-      </section>
-
-      {/* =================================================================== */}
-      {/* 5. ClassOverview (§20, §30) */}
-      {/* =================================================================== */}
-      <section aria-labelledby="class-overview-heading" className="space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h3
-              id="class-overview-heading"
-              className="text-[18px] sm:text-[19px] font-bold text-[#1C1917] font-serif"
-            >
-              Tổng quan các lớp giáo lý
-            </h3>
-            <p className="text-[13px] text-[#78716C]">
-              Tình hình sĩ số, ban giáo lý phụ trách và chuyên cần từng lớp
-            </p>
-          </div>
-
-          {/* Filter by Grade */}
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            <Filter className="w-3.5 h-3.5 text-[#78716C]" />
-            <div className="flex items-center bg-[#FAFAF9] rounded-lg p-0.5 border border-[#E7E5E4] text-[12px]">
-              {[
-                { id: "ALL", label: "Tất cả" },
-                { id: "Khai Tâm", label: "Khai Tâm" },
-                { id: "Rước Lễ", label: "Rước Lễ" },
-                { id: "Thêm Sức", label: "Thêm Sức" },
-                { id: "Bao Đồng", label: "Bao Đồng" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setSelectedGradeFilter(tab.id)}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
-                    selectedGradeFilter === tab.id
-                      ? "bg-white text-[#B4232C] shadow-xs font-semibold"
-                      : "text-[#78716C] hover:text-[#1C1917]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Grid of ClassCards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-          {filteredClasses.map((cls) => (
-            <ClassCard
-              key={cls.id}
-              classInfo={cls}
-              onViewDetails={() => alert(`Xem chi tiết hồ sơ lớp: ${cls.name}`)}
-              onAttendanceClick={() => onNavigate && onNavigate("/teacher/attendance")}
-              onScoreClick={() => onNavigate && onNavigate("/teacher/scores")}
+      {/* Công cụ kiểm thử trạng thái thẻ — chỉ hiện khi bật Chế độ demo (MIG-10) */}
+      {demoMode && (
+        <Card variant="outline" padding="sm" className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <p className="text-sm font-semibold text-ink-2">Chế độ demo: trạng thái thẻ biểu đồ</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-ink-3">Điểm danh</span>
+            <SegmentedControl
+              ariaLabel="Trạng thái thẻ Điểm danh hôm nay"
+              size="sm"
+              value={attendanceChartStatus}
+              onChange={setAttendanceChartStatus}
+              options={CHART_STATUS_OPTIONS}
             />
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-ink-3">Học tập</span>
+            <SegmentedControl
+              ariaLabel="Trạng thái thẻ Kết quả học tập"
+              size="sm"
+              value={scoreChartStatus}
+              onChange={setScoreChartStatus}
+              options={CHART_STATUS_OPTIONS}
+            />
+          </div>
+        </Card>
+      )}
 
-      {/* =================================================================== */}
-      {/* 6 & 7. ActivityFeed & NotificationPreview (§24, §25, §30, Wireframe A) */}
-      {/* Desktop: 2 columns (ActivityFeed & NotificationPreview) */}
-      {/* =================================================================== */}
-      <section aria-label="Hoạt động và Thông báo điều hành" className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-        {/* 6. ActivityFeed */}
-        <ActivityFeed
-          activities={MOCK_ADMIN_ACTIVITIES}
-          title="Nhật ký hoạt động thời gian thực"
-          onViewAll={() => alert("Xem toàn bộ nhật ký hệ thống")}
-        />
-
-        {/* 7. NotificationPreview / Cảnh báo */}
-        <div className="bg-white rounded-[14px] border border-[#E7E5E4] p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-          <NotificationPreview
-            notifications={MOCK_ADMIN_NOTIFICATIONS}
-            onViewAll={() => onNavigate && onNavigate("/parent/notifications")}
+      {/*
+        BENTO GAPLESS — grid-flow-dense, kiểm tra tổng ô = cột × hàng:
+        - Mobile (1 cột): mọi khối 1 ô, xếp chồng. KPI tự chia 2 cột bên trong KPIGroup.
+        - md (2 cột): KPI 2 | Điểm danh 2 | Học tập 2 | Cảnh báo 1 + Hoạt động 1 | Lớp học 2
+          = 2 + 2 + 2 + 2 + 2 = 10 ô = 2 × 5.
+        - lg (4 cột, còn hẹp vì sidebar): KPI 4 | Điểm danh 2×2 + Học tập 2×2 = 8 | Lớp học 4 | Cảnh báo 2 + Hoạt động 2
+          = 4 + 8 + 4 + 4 = 20 ô = 4 × 5.
+        - xl (4 cột): KPI 4 | Điểm danh 2×2 + Học tập 2×2 = 8 | Lớp học 2 + Cảnh báo 1 + Hoạt động 1 = 4
+          = 4 + 8 + 4 = 16 ô = 4 × 4.
+        Thứ tự DOM theo mobile (Cảnh báo, Hoạt động trước Lớp học); từ lg dùng order để Lớp học đứng trước.
+      */}
+      <div
+        ref={revealRef}
+        className="grid grid-flow-dense grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4"
+      >
+        {/* KPI row — 4 × 1 cột trên desktop */}
+        <div className="md:col-span-2 lg:col-span-4">
+          <KPIGroup
+            items={[
+              {
+                title: "Học sinh",
+                value: <CountUp value={totalStudents} />,
+                icon: <GraduationCap className="size-5" />,
+                trend: "+8 so với HK trước",
+                trendType: "positive",
+                subtitle: `${classes.length} lớp · 4 khối`,
+                onClick: () => go("/admin/students"),
+              },
+              {
+                title: "Lớp học",
+                value: <CountUp value={classes.length} />,
+                icon: <School className="size-5" />,
+                trend: "Đủ GLV phụ trách",
+                trendType: "neutral",
+                subtitle: "Khai Tâm đến Bao Đồng",
+                onClick: () => go("/admin/classes"),
+              },
+              {
+                title: "Giáo lý viên",
+                value: <CountUp value={18} />,
+                icon: <UserCheck className="size-5" />,
+                trend: "1 GLV / 10 em",
+                trendType: "neutral",
+                subtitle: "Đang phục vụ năm học này",
+                onClick: () => go("/admin/users"),
+              },
+              {
+                title: "Chuyên cần",
+                value: <CountUp value={attendanceRate} suffix="%" />,
+                icon: <CalendarCheck className="size-5" />,
+                trend: "+2% so với tuần trước",
+                trendType: "positive",
+                subtitle: `${totalPresent}/${totalStudents} em có mặt`,
+                onClick: () => go("/admin/attendance"),
+              },
+            ]}
           />
         </div>
-      </section>
+
+        {/* Điểm danh hôm nay — 2 × 2 */}
+        <div data-reveal className="@container md:col-span-2 lg:row-span-2">
+          <ChartCard
+            title="Điểm danh hôm nay"
+            subtitle={`Chúa Nhật 24/09 · ${classes.length}/${classes.length} lớp đã điểm danh`}
+            status={attendanceChartStatus}
+            onRetry={() => setAttendanceChartStatus("ready")}
+            badge={
+              <Badge variant={attendanceRate >= 90 ? "success" : "warning"} size="sm" dot>
+                {attendanceRate >= 90 ? "Đạt mục tiêu" : "Dưới mục tiêu"}
+              </Badge>
+            }
+          >
+            <div className="flex flex-1 flex-col gap-5">
+              <div className="flex flex-1 flex-col items-center gap-5 @md:flex-row">
+                <ProgressRing value={attendanceRate} size="xl" tone="success" thickness={9} label={`Tỷ lệ có mặt ${attendanceRate}%`}>
+                  <span className="text-3xl font-bold tracking-tight text-ink">
+                    <CountUp value={attendanceRate} suffix="%" />
+                  </span>
+                  <span className="text-xs text-ink-3">có mặt</span>
+                </ProgressRing>
+                <ul className="grid w-full flex-1 grid-cols-2 gap-2.5">
+                  {attendanceTiles.map((tile) => (
+                    <li key={tile.key} className={cn("rounded-control p-3", TONE_SOFT[tile.tone])}>
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink-2 [&_svg]:size-4">
+                        <span className={cn("inline-flex", TONE_TEXT[tile.tone])} aria-hidden="true">
+                          {tile.icon}
+                        </span>
+                        {tile.label}
+                      </p>
+                      <p className="mt-1 text-2xl font-bold tracking-tight">
+                        <CountUp value={tile.value} />
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                <p className="text-sm text-ink-3">
+                  <span className="font-mono font-semibold text-ink">
+                    {totalPresent}/{totalStudents}
+                  </span>{" "}
+                  em có mặt · cập nhật 08:30
+                </p>
+                <Button
+                  variant="ghost"
+                  rightIcon={<ArrowRight />}
+                  onClick={() => go("/admin/attendance")}
+                  className="-mr-3 px-3 text-primary-ink hover:text-primary-ink"
+                >
+                  Xem chi tiết
+                </Button>
+              </div>
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* Kết quả học tập — 2 × 2 */}
+        <div data-reveal className="md:col-span-2 lg:row-span-2">
+          <ChartCard
+            title="Kết quả học tập"
+            subtitle="Học kỳ I · thang điểm 10"
+            status={scoreChartStatus}
+            onRetry={() => setScoreChartStatus("ready")}
+          >
+            <div className="flex flex-1 flex-col gap-5">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-sm text-ink-2">Điểm trung bình toàn đoàn</p>
+                  <p className="text-4xl font-bold tracking-tight text-ink">
+                    <CountUp value={8.2} decimals={1} />
+                  </p>
+                </div>
+                <Badge variant="success" icon={<TrendingUp className="size-3.5" />}>
+                  +0,4 so với HK trước
+                </Badge>
+              </div>
+
+              <ul className="space-y-3.5" aria-label="Phân bố điểm">
+                {SCORE_BANDS.map((band) => {
+                  const pct = scoreTotal > 0 ? Math.round((band.count / scoreTotal) * 100) : 0;
+                  return (
+                    <li key={band.label} className="space-y-1.5">
+                      <div className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium text-ink">{band.label}</span>
+                          <span className="text-ink-3"> · {band.range}</span>
+                        </span>
+                        <span className="shrink-0 text-ink-2">
+                          <span className="font-mono font-semibold text-ink">{band.count}</span> em · {pct}%
+                        </span>
+                      </div>
+                      <ProgressBar value={band.count} max={scoreTotal} tone={band.tone} size="md" label={`${band.label}: ${band.count} em`} />
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <p className="mt-auto flex items-center justify-between gap-3 border-t border-line pt-3 text-sm text-ink-3">
+                <span>Tỷ lệ đạt chuẩn (từ 5,0)</span>
+                <span className="font-mono font-semibold text-ink">{formatPercent(passRate)}%</span>
+              </p>
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* Cảnh báo — 1 ô từ xl (2 ô ở lg) */}
+        <div data-reveal className="lg:order-2 lg:col-span-2 xl:col-span-1">
+          <Card padding="md" className="flex h-full flex-col gap-4">
+            <SectionHeader
+              title="Cần chú ý"
+              description={`${lowAttendanceClasses.length} lớp vắng trên 10%`}
+              icon={<AlertTriangle />}
+              iconTone="warning"
+            />
+            {lowAttendanceClasses.length === 0 ? (
+              <p className="flex items-center gap-2 rounded-control bg-success-soft p-3 text-sm text-ink">
+                <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
+                Tất cả các lớp đều đạt chuyên cần từ 90%.
+              </p>
+            ) : (
+              <ul className="-mx-2 space-y-1">
+                {lowAttendanceClasses.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => go(`/classes/${c.id}`)}
+                      className="group flex min-h-11 w-full items-center gap-3 rounded-control px-2 py-2 text-left transition-colors hover:bg-surface-2 focus-visible:outline-3"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-ink">{c.name}</span>
+                        <span className="block truncate text-xs text-ink-3">
+                          Vắng {c.studentCount - c.presentCount} em · {c.grade}
+                        </span>
+                      </span>
+                      <Badge variant="warning" size="sm">
+                        {c.attendanceRate}%
+                      </Badge>
+                      <ChevronRight
+                        className="size-4 shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {upcomingDeadline && (
+              <div className="rounded-control bg-info-soft p-3">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-info">
+                  <CalendarClock className="size-4 shrink-0" aria-hidden="true" />
+                  Sắp đến hạn
+                </p>
+                <p className="mt-1 text-sm text-ink">{upcomingDeadline.title}</p>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              rightIcon={<ArrowRight />}
+              onClick={() => go("/admin/notifications")}
+              className="-mx-3 mt-auto self-start px-3 text-primary-ink hover:text-primary-ink"
+            >
+              Xem thông báo
+            </Button>
+          </Card>
+        </div>
+
+        {/* Hoạt động — 1 ô từ xl (2 ô ở lg) */}
+        <div data-reveal className="lg:order-3 lg:col-span-2 xl:col-span-1">
+          <ActivityFeed
+            activities={MOCK_ADMIN_ACTIVITIES}
+            title="Hoạt động"
+            maxItems={4}
+            onViewAll={() => go("/admin/activity-log")}
+            className="h-full"
+          />
+        </div>
+
+        {/* Lớp học — 2 ô từ xl (4 ô ở lg) */}
+        <div data-reveal className="md:col-span-2 lg:order-1 lg:col-span-4 xl:col-span-2">
+          <Card variant="muted" padding="md" className="flex h-full flex-col gap-4">
+            <SectionHeader
+              title="Lớp học"
+              description="Sĩ số, GLV phụ trách và chuyên cần hôm nay"
+              icon={<School />}
+              action={
+                <Button
+                  variant="ghost"
+                  rightIcon={<ArrowRight />}
+                  onClick={() => go("/admin/classes")}
+                  className="-mr-3 px-3 text-primary-ink hover:text-primary-ink"
+                >
+                  Tất cả lớp
+                </Button>
+              }
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {overviewClasses.map((cls) => (
+                <ClassCard key={cls.id} classInfo={cls} onClick={(id) => go(`/classes/${id}`)} />
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

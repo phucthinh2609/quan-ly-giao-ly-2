@@ -1,21 +1,37 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="light" data-text-size="md">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F7F3ED" />
     <title>Quản Lý Giáo Lý - Đoàn Kitô Vua</title>
-    <meta name="description" content="Hệ thống Quản lý Học tập Giáo lý - Đoàn Kitô Vua với bảng điểm danh, nhập điểm, bảng điểm học sinh và thông tin phụ huynh." />
+    <meta name="description" content="Hệ thống Quản lý Học tập Giáo lý - Đoàn Kitô Vua: điểm danh một chạm, nhập điểm nhanh, phụ huynh và học sinh theo dõi hành trình Giáo lý." />
     <meta property="og:title" content="Quản Lý Giáo Lý - Đoàn Kitô Vua" />
-    <meta property="og:description" content="Hệ thống Quản lý Học tập Giáo lý - Đoàn Kitô Vua với bảng điểm danh, nhập điểm, bảng điểm học sinh và thông tin phụ huynh." />
+    <meta property="og:description" content="Điểm danh một chạm, nhập điểm nhanh, phụ huynh và học sinh theo dõi hành trình Giáo lý." />
     <meta property="og:type" content="website" />
-    
-    <!-- Google Fonts: Inter & Noto Serif -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+
+    <!-- Apply saved theme and text size before first paint to avoid a flash -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("qlgl.theme");
+          var s = localStorage.getItem("qlgl.textSize");
+          if (t !== "dark" && t !== "light") {
+            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.setAttribute("data-theme", t);
+          if (s === "md" || s === "lg" || s === "xl") document.documentElement.setAttribute("data-text-size", s);
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Google Fonts: Geist (UI, Vietnamese subset), Geist Mono (numbers), Fraunces italic (quotes) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@500;600&family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap" rel="stylesheet" />
   </head>
-  <body class="bg-[var(--color-bg-page)] text-[var(--color-text-primary)] font-sans antialiased min-h-screen">
+  <body class="bg-canvas text-ink font-sans antialiased min-h-dvh">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

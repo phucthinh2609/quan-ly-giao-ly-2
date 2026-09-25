@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "../../lib/cn";
 
 export interface DividerProps {
   orientation?: "horizontal" | "vertical";
@@ -6,42 +7,27 @@ export interface DividerProps {
   className?: string;
 }
 
-export const Divider: React.FC<DividerProps> = ({
-  orientation = "horizontal",
-  label,
-  className = "",
-}) => {
+/** Divider (03 §4.12): đường kẻ border-line, có thể kèm nhãn ở giữa. */
+export const Divider: React.FC<DividerProps> = ({ orientation = "horizontal", label, className = "" }) => {
   if (orientation === "vertical") {
     return (
       <div
         role="separator"
         aria-orientation="vertical"
-        className={`inline-block w-[1px] self-stretch bg-[#E7E5E4] min-h-[16px] ${className}`}
+        className={cn("inline-block min-h-4 w-px shrink-0 self-stretch bg-line", className)}
       />
     );
   }
 
   if (label) {
     return (
-      <div
-        role="separator"
-        aria-orientation="horizontal"
-        className={`flex items-center w-full my-4 font-sans ${className}`}
-      >
-        <div className="flex-grow border-t border-[#E7E5E4]" />
-        <span className="px-3 text-[13px] font-medium text-[#78716C] uppercase tracking-wider shrink-0 select-none">
-          {label}
-        </span>
-        <div className="flex-grow border-t border-[#E7E5E4]" />
+      <div role="separator" aria-orientation="horizontal" className={cn("my-4 flex w-full items-center gap-3", className)}>
+        <span className="h-px flex-1 bg-line" aria-hidden="true" />
+        <span className="shrink-0 text-sm font-medium text-ink-3 select-none">{label}</span>
+        <span className="h-px flex-1 bg-line" aria-hidden="true" />
       </div>
     );
   }
 
-  return (
-    <hr
-      role="separator"
-      aria-orientation="horizontal"
-      className={`w-full border-0 border-t border-[#E7E5E4] my-3 ${className}`}
-    />
-  );
+  return <hr aria-orientation="horizontal" className={cn("my-3 w-full border-0 border-t border-line", className)} />;
 };

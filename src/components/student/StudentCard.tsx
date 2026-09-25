@@ -1,81 +1,61 @@
 import React from "react";
-import { ChevronRight, Award, CheckCircle2, XCircle, Clock, Check } from "lucide-react";
+import { ChevronRight, Award, CheckCircle2, XCircle, Clock, Check, FileCheck2 } from "lucide-react";
+import { cn } from "../../lib/cn";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Student, AttendanceStatus } from "../../types";
 
 export interface StudentCardProps {
-  /**
-   * Thông tin học sinh
-   */
+  /** Thông tin học sinh */
   student: Student;
-  /**
-   * Có hiển thị tóm tắt điểm số hay không
-   */
+  /** Có hiển thị tóm tắt điểm số hay không */
   showScore?: boolean;
-  /**
-   * Điểm trung bình hoặc điểm số hiện tại
-   */
+  /** Điểm trung bình hoặc điểm số hiện tại */
   score?: number | null;
-  /**
-   * Có hiển thị trạng thái điểm danh hay không
-   */
+  /** Có hiển thị trạng thái điểm danh hay không */
   showAttendance?: boolean;
-  /**
-   * Trạng thái điểm danh (PRESENT, ABSENT, EXCUSED, LATE)
-   */
+  /** Trạng thái điểm danh (PRESENT, ABSENT, EXCUSED, LATE) */
   attendanceStatus?: AttendanceStatus;
-  /**
-   * Có hiển thị nút hành động hay không
-   */
+  /** Có hiển thị nút hành động hay không */
   showAction?: boolean;
-  /**
-   * Nhãn nút hành động
-   */
+  /** Nhãn nút hành động */
   actionLabel?: string;
-  /**
-   * Callback khi nhấn nút hành động
-   */
+  /** Callback khi nhấn nút hành động */
   onAction?: (student: Student) => void;
-  /**
-   * Callback khi nhấn vào toàn bộ thẻ
-   */
+  /** Callback khi nhấn vào toàn bộ thẻ */
   onClick?: () => void;
-  /**
-   * Trạng thái đang được chọn (Selected)
-   */
+  /** Trạng thái đang được chọn (Selected) */
   selected?: boolean;
-  /**
-   * Trạng thái vô hiệu hóa (Disabled)
-   */
+  /** Trạng thái vô hiệu hóa (Disabled) */
   disabled?: boolean;
   className?: string;
 }
 
+/** Badge trạng thái điểm danh — luôn icon + chữ (01 §3.5). */
 const getAttendanceBadge = (status?: AttendanceStatus) => {
   switch (status) {
     case "PRESENT":
       return (
-        <Badge variant="success" size="sm" icon={<CheckCircle2 className="w-3 h-3" />}>
+        <Badge variant="success" size="sm" icon={<CheckCircle2 />}>
           Có mặt
         </Badge>
       );
     case "ABSENT":
       return (
-        <Badge variant="error" size="sm" icon={<XCircle className="w-3 h-3" />}>
+        <Badge variant="error" size="sm" icon={<XCircle />}>
           Vắng
         </Badge>
       );
     case "EXCUSED":
       return (
-        <Badge variant="warning" size="sm" icon={<Clock className="w-3 h-3" />}>
+        <Badge variant="info" size="sm" icon={<FileCheck2 />}>
           Có phép
         </Badge>
       );
     case "LATE":
       return (
-        <Badge variant="info" size="sm" icon={<Clock className="w-3 h-3" />}>
-          Muộn
+        <Badge variant="warning" size="sm" icon={<Clock />}>
+          Đi muộn
         </Badge>
       );
     default:
@@ -84,17 +64,9 @@ const getAttendanceBadge = (status?: AttendanceStatus) => {
 };
 
 /**
- * StudentCard Component (§19 03_Component_Library)
- *
- * Cấu trúc phân cấp:
- * ├── Avatar
- * ├── StudentInfo (Họ tên, Tên Thánh, Mã số / STT)
- * ├── ClassBadge
- * ├── AttendanceStatus
- * ├── ScoreSummary
- * └── Action
- *
- * States: Default, Hover, Active, Selected, Disabled.
+ * StudentCard (03 §10) — thẻ học sinh dùng trong trang quản lý (không hiển thị ở Góc của em).
+ * Avatar · tên Thánh + họ tên · lớp · điểm danh · điểm TB · hành động.
+ * States: Default, Hover, Focus, Active, Selected, Disabled.
  */
 export const StudentCard: React.FC<StudentCardProps> = ({
   student,
@@ -108,13 +80,13 @@ export const StudentCard: React.FC<StudentCardProps> = ({
   onClick,
   selected = false,
   disabled = false,
-  className = "",
+  className,
 }) => {
   const { code, orderNumber, name, christianName, className: studentClassName, avatarUrl } = student;
 
   const handleClick = () => {
     if (disabled) return;
-    if (onClick) onClick();
+    onClick?.();
   };
 
   return (
@@ -122,53 +94,55 @@ export const StudentCard: React.FC<StudentCardProps> = ({
       onClick={handleClick}
       role="button"
       tabIndex={disabled ? -1 : 0}
+      aria-pressed={selected || undefined}
+      aria-disabled={disabled || undefined}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (!disabled && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           handleClick();
         }
       }}
-      className={`group relative bg-white rounded-[14px] border p-3.5 sm:p-4 text-left transition-all duration-200 ${
+      className={cn(
+        "group relative flex flex-col justify-between rounded-card border bg-surface p-4 text-left sm:p-5",
+        "transition-[transform,box-shadow,border-color,background-color] duration-200 ease-out-soft",
+        "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50",
         disabled
-          ? "opacity-60 cursor-not-allowed border-[#E7E5E4] bg-[#FAFAF9]"
+          ? "cursor-not-allowed border-line bg-surface-2 opacity-60"
           : selected
-          ? "border-[#B4232C] bg-[#FFF1F2]/20 ring-2 ring-[#B4232C]/20 shadow-xs cursor-pointer"
-          : "border-[#E7E5E4] hover:border-[#B4232C] hover:shadow-xs cursor-pointer active:scale-[0.99]"
-      } flex flex-col justify-between ${className}`}
+            ? "cursor-pointer border-primary bg-primary-soft/40 shadow-card ring-2 ring-primary/20"
+            : "cursor-pointer border-line shadow-xs hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card active:scale-[0.99]",
+        className
+      )}
     >
-      {/* Top row: Avatar + Student Info + Selected checkmark */}
+      {/* Avatar + thông tin */}
       <div className="flex items-start gap-3">
-        <div className="relative">
-          <Avatar
-            name={name}
-            src={avatarUrl || undefined}
-            size="md"
-          />
+        <div className="relative shrink-0">
+          <Avatar name={name} src={avatarUrl || undefined} size="md" />
           {selected && (
-            <div className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-[#B4232C] text-white rounded-full flex items-center justify-center shadow-xs">
-              <Check className="w-3 h-3 stroke-[3]" />
-            </div>
+            <span
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 inline-flex size-5 items-center justify-center rounded-full bg-primary text-on-primary shadow-xs ring-2 ring-surface"
+            >
+              <Check className="size-3" strokeWidth={3} />
+            </span>
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {christianName && (
-              <span className="text-[12px] font-medium text-[#78716C]">
-                {christianName}
-              </span>
-            )}
-            <span className="text-[11px] font-mono text-[#A8A29E] bg-[#F5F5F4] px-1.5 py-0.2 rounded">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {christianName && <span className="text-sm font-medium text-ink-2">{christianName}</span>}
+            <span className="rounded-xs bg-surface-2 px-1.5 font-mono text-xs text-ink-3">
               #{orderNumber || code}
             </span>
           </div>
 
-          <h4 className="text-[15px] sm:text-[16px] font-bold text-[#1C1917] group-hover:text-[#B4232C] transition-colors truncate">
+          <h4 className="truncate text-base font-semibold text-ink transition-colors group-hover:text-primary-ink sm:text-lg">
             {name}
           </h4>
 
           {studentClassName && (
-            <div className="mt-1">
+            <div className="mt-1.5">
               <Badge variant="neutral" size="sm">
                 {studentClassName}
               </Badge>
@@ -177,23 +151,21 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         </div>
       </div>
 
-      {/* Middle indicators: Attendance & Score */}
+      {/* Điểm danh & điểm */}
       {(showAttendance || showScore) && (
-        <div className="mt-3 pt-2.5 border-t border-[#F5F5F4] flex items-center justify-between gap-2 text-[12px]">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-sm">
           {showAttendance && (
             <div className="flex items-center gap-1.5">
-              <span className="text-[#78716C]">Điểm danh:</span>
-              {getAttendanceBadge(attendanceStatus) || (
-                <span className="text-[#A8A29E] italic">Chưa ghi</span>
-              )}
+              <span className="text-ink-2">Điểm danh:</span>
+              {getAttendanceBadge(attendanceStatus) || <span className="text-ink-3">Chưa ghi</span>}
             </div>
           )}
 
           {showScore && (
-            <div className="flex items-center gap-1 ml-auto">
-              <Award className="w-3.5 h-3.5 text-[#B86F08]" />
-              <span className="text-[#78716C]">Điểm TB:</span>
-              <span className="font-bold text-[#B4232C]">
+            <div className="ml-auto flex items-center gap-1.5">
+              <Award className="size-4 text-gold-ink" aria-hidden="true" />
+              <span className="text-ink-2">Điểm TB:</span>
+              <span className="font-mono text-base font-semibold text-ink">
                 {score !== null && score !== undefined ? score.toFixed(1) : "—"}
               </span>
             </div>
@@ -201,10 +173,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         </div>
       )}
 
-      {/* Footer Action */}
+      {/* Hành động */}
       {showAction && (
-        <div className="mt-3 pt-2.5 border-t border-[#F5F5F4] flex items-center justify-between text-[12px]">
-          <span className="text-[#78716C] font-mono text-[11px]">Mã: {code}</span>
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2">
+          <span className="font-mono text-xs text-ink-3">Mã: {code}</span>
           <button
             type="button"
             disabled={disabled}
@@ -213,10 +185,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
               if (onAction) onAction(student);
               else handleClick();
             }}
-            className="font-semibold text-[#B4232C] hover:text-[#941D25] flex items-center gap-0.5 transition-colors cursor-pointer"
+            className="-mr-2 inline-flex min-h-11 items-center gap-0.5 rounded-full px-2 text-sm font-semibold text-primary-ink transition-colors hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-offset-1 disabled:cursor-not-allowed"
           >
             <span>{actionLabel}</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="size-4" aria-hidden="true" />
           </button>
         </div>
       )}

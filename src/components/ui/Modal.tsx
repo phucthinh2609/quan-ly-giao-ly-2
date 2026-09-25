@@ -1,63 +1,58 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { IconButton } from "./IconButton";
+import { useOverlayBehavior } from "./BottomSheet";
+import { cn } from "../../lib/cn";
+import { gsap, useGSAP } from "../../lib/motion";
 
 /**
- * ============================================================================
- * QUY TẮC BẮT BUỘC (§18, WIREFRAME B, §9 USER FLOW):
- * Modal CHỈ dùng cho Confirmation (Xác nhận hành động) và CRUD nhỏ (Tạo/Sửa nhanh).
- * TUYỆT ĐỐI KHÔNG ĐƯỢC DÙNG Modal cho việc nhập điểm từng học sinh!
+ * Quy tắc sử dụng:
+ * Modal chỉ dùng cho xác nhận hành động không đảo ngược được và CRUD nhỏ (tạo/sửa nhanh).
+ * Không dùng Modal để nhập điểm từng học sinh — nhập điểm luôn inline trên bảng/thẻ
+ * (BulkScoreEntry / ScoreTable) để GLV nhập liên tục bằng bàn phím số.
  *
- * Lý do:
- * Nhập điểm cho học sinh bắt buộc phải dùng BulkScoreEntry / ScoreTable inline
- * fast-input trên toàn trang (Wireframe B) để đảm bảo tốc độ nhập liệu liên tục
- * bằng bàn phím số (Numeric Keyboard), tránh tình trạng mở/đóng popup liên tục
- * gây gián đoạn và mệt mỏi cho Giáo Lý Viên.
- * ============================================================================
+ * Dưới breakpoint sm, Modal hiển thị như bottom sheet (neo đáy, full width, bo góc trên).
  */
 
 export interface ModalProps {
-  /**
-   * Trạng thái mở/đóng modal
-   */
+  /** Trạng thái mở/đóng modal */
   isOpen: boolean;
-  /**
-   * Callback khi người dùng yêu cầu đóng modal (bấm X, backdrop hoặc Escape)
-   */
+  /** Gọi khi người dùng yêu cầu đóng (nút X, backdrop hoặc Escape) */
   onClose: () => void;
-  /**
-   * Tiêu đề Modal
-   */
+  /** Tiêu đề Modal */
   title: React.ReactNode;
-  /**
-   * Mô tả hoặc chú thích phụ bên dưới tiêu đề
-   */
+  /** Mô tả phụ bên dưới tiêu đề */
   description?: React.ReactNode;
-  /**
-   * Nội dung chính của Modal (Confirmation hoặc form CRUD nhỏ)
-   */
+  /** Nội dung chính (xác nhận hoặc form CRUD nhỏ) */
   children: React.ReactNode;
-  /**
-   * Phần nút hành động phía dưới (Footer Buttons)
-   */
+  /** Các nút hành động phía dưới */
   footer?: React.ReactNode;
   /**
-   * Kích thước modal:
-   * - sm: 400px (Phù hợp Confirmation/Xóa)
-   * - md: 540px (Phù hợp form CRUD nhỏ)
-   * - lg: 680px (Phù hợp chi tiết ngắn)
+   * Độ rộng tối đa (từ sm trở lên):
+   * - sm: 26.25rem (xác nhận/xóa)
+   * - md: 33.75rem (form CRUD nhỏ)
+   * - lg: 42.5rem (chi tiết ngắn)
    */
   size?: "sm" | "md" | "lg";
-  /**
-   * Vô hiệu hóa nút đóng khi đang xử lý tác vụ bất đồng bộ (loading)
-   */
+  /** Đang xử lý: ẩn nút đóng, chặn đóng bằng backdrop/Escape */
   loading?: boolean;
-  /**
-   * ARIA role: 'dialog' cho form thông thường hoặc 'alertdialog' cho hộp thoại xác nhận quan trọng
-   */
+  /** 'dialog' cho form thông thường, 'alertdialog' cho hộp thoại xác nhận quan trọng */
   role?: "dialog" | "alertdialog";
   className?: string;
 }
+
+const MOTION_QUERIES = {
+  motion: "(prefers-reduced-motion: no-preference)",
+  reduce: "(prefers-reduced-motion: reduce)",
+  mobile: "(max-width: 639.98px)",
+};
+
+const sizeClasses: Record<NonNullable<ModalProps["size"]>, string> = {
+  sm: "sm:max-w-[26.25rem]",
+  md: "sm:max-w-[33.75rem]",
+  lg: "sm:max-w-[42.5rem]",
+};
 
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
@@ -71,74 +66,112 @@ export const Modal: React.FC<ModalProps> = ({
   role = "dialog",
   className = "",
 }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
-  // Khóa cuộn trang nền và lắng nghe phím ESC
-  useEffect(() => {
-    if (isOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+  // Giữ modal trong DOM đến khi hiệu ứng đóng chạy xong.
+  const [mounted, setMounted] = useState(isOpen);
+  if (isOpen && !mounted) setMounted(true);
 
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape" && !loading) {
-          onClose();
+  const handleClose = useCallback(() => {
+    if (!loading) onClose();
+  }, [loading, onClose]);
+
+  useOverlayBehavior({ isOpen, onClose: handleClose, rootRef, panelRef, closeOnEscape: !loading });
+
+  useGSAP(
+    () => {
+      if (!mounted) return;
+      const panel = panelRef.current;
+      const backdrop = backdropRef.current;
+      if (!panel || !backdrop) return;
+      gsap.killTweensOf([panel, backdrop]);
+
+      const mm = gsap.matchMedia();
+      mm.add(MOTION_QUERIES, (ctx) => {
+        const reduce = Boolean(ctx.conditions?.reduce);
+        const mobile = Boolean(ctx.conditions?.mobile);
+        if (reduce) {
+          if (!isOpen) setMounted(false);
+          return;
         }
-      };
+        if (isOpen) {
+          gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" });
+          if (mobile) {
+            gsap.fromTo(
+              panel,
+              { yPercent: 100 },
+              { yPercent: 0, duration: 0.42, ease: "power3.out", clearProps: "transform" }
+            );
+          } else {
+            gsap.fromTo(
+              panel,
+              { opacity: 0, scale: 0.96 },
+              { opacity: 1, scale: 1, duration: 0.24, ease: "power3.out", clearProps: "transform,opacity" }
+            );
+          }
+        } else {
+          const done = () => setMounted(false);
+          gsap.to(backdrop, { opacity: 0, duration: 0.18, ease: "power2.in" });
+          if (mobile) {
+            gsap.to(panel, { yPercent: 100, duration: 0.26, ease: "power2.in", onComplete: done });
+          } else {
+            gsap.to(panel, { opacity: 0, scale: 0.97, duration: 0.16, ease: "power2.in", onComplete: done });
+          }
+        }
+      });
+      return () => mm.revert();
+    },
+    { dependencies: [isOpen, mounted], revertOnUpdate: true }
+  );
 
-      window.addEventListener("keydown", handleKeyDown);
-      return () => {
-        document.body.style.overflow = originalOverflow;
-        window.removeEventListener("keydown", handleKeyDown);
-      };
-    }
-  }, [isOpen, onClose, loading]);
+  if (!mounted || typeof document === "undefined") return null;
 
-  if (!isOpen) return null;
-
-  const sizeClasses = {
-    sm: "max-w-[420px]",
-    md: "max-w-[540px]",
-    lg: "max-w-[680px]",
-  }[size];
-
-  return (
+  return createPortal(
     <div
-      role={role}
-      aria-modal="true"
-      aria-labelledby="modal-title"
-      aria-describedby={description ? "modal-description" : undefined}
-      className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+      ref={rootRef}
+      data-overlay-root={isOpen ? "" : undefined}
+      className={cn(
+        "fixed inset-0 z-(--z-modal) flex items-end justify-center sm:items-center sm:p-6",
+        !isOpen && "pointer-events-none"
+      )}
     >
-      {/* Backdrop overlay mờ nền */}
+      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-200 animate-in fade-in"
-        onClick={() => {
-          if (!loading) onClose();
-        }}
+        ref={backdropRef}
+        className="absolute inset-0 bg-night/50 backdrop-blur-sm"
+        onClick={handleClose}
         aria-hidden="true"
       />
 
-      {/* Modal Dialog Window */}
+      {/* Hộp thoại */}
       <div
-        ref={modalRef}
-        className={`
-          relative z-10 w-full bg-white rounded-[16px] sm:rounded-[18px] shadow-xl border border-[#E7E5E4]
-          flex flex-col my-auto animate-in zoom-in-95 fade-in duration-200 ease-out
-          ${sizeClasses}
-          ${className}
-        `}
+        ref={panelRef}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        aria-busy={loading || undefined}
+        tabIndex={-1}
+        className={cn(
+          "relative flex w-full flex-col overflow-hidden bg-surface text-ink shadow-float outline-none",
+          "max-h-[92dvh] rounded-t-card-lg border-t border-line",
+          "sm:max-h-[85dvh] sm:rounded-card-lg sm:border",
+          sizeClasses[size],
+          className
+        )}
       >
-        {/* Modal Header */}
-        <div className="flex items-start justify-between p-5 pb-3 border-b border-[#E7E5E4]">
-          <div className="space-y-1 pr-4">
-            <h2
-              id="modal-title"
-              className="text-[18px] sm:text-[20px] font-bold text-[#1C1917] tracking-tight font-serif"
-            >
+        {/* Header */}
+        <div className="flex shrink-0 items-start justify-between gap-4 px-5 pt-5 pb-3 sm:px-6 sm:pt-6">
+          <div className="min-w-0 space-y-1">
+            <h2 id={titleId} className="text-lg font-semibold tracking-tight text-ink sm:text-xl">
               {title}
             </h2>
             {description && (
-              <p id="modal-description" className="text-[13px] sm:text-[14px] text-[#78716C] leading-relaxed">
+              <p id={descriptionId} className="text-sm leading-relaxed text-ink-2">
                 {description}
               </p>
             )}
@@ -148,27 +181,36 @@ export const Modal: React.FC<ModalProps> = ({
             <IconButton
               aria-label="Đóng hộp thoại"
               variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-[#78716C] hover:text-[#1C1917] -mt-1 -mr-1"
+              size="md"
+              onClick={handleClose}
+              className="-mt-2 -mr-2 shrink-0"
             >
-              <X className="w-5 h-5" />
+              <X />
             </IconButton>
           )}
         </div>
 
-        {/* Modal Body Content */}
-        <div className="p-5 overflow-y-auto max-h-[70vh] text-[14px] sm:text-[15px] text-[#292524]">
+        {/* Nội dung */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-3 text-base text-ink sm:px-6">
           {children}
         </div>
 
-        {/* Modal Footer Actions */}
-        {footer && (
-          <div className="flex items-center justify-end gap-2.5 p-4 sm:p-5 pt-3 border-t border-[#E7E5E4] bg-[#FAFAF9] rounded-b-[16px] sm:rounded-b-[18px]">
+        {/* Footer */}
+        {footer ? (
+          <div
+            className={cn(
+              "flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2/50",
+              "px-5 pt-3 pb-safe sm:px-6",
+              "max-sm:[&>button]:flex-1"
+            )}
+          >
             {footer}
           </div>
+        ) : (
+          <div className="shrink-0 pb-safe" aria-hidden="true" />
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

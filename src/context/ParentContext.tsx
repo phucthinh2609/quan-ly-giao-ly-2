@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   LinkedStudent,
@@ -16,6 +17,10 @@ import {
   MOCK_LINKED_STUDENTS,
   fetchStudentAcademicReport,
   fetchStudentNotifications,
+  buildAttendanceHistory,
+  getTeacherContact,
+  ParentAttendanceSession,
+  ParentTeacherContact,
 } from "../services/parentMockData";
 
 interface ParentContextType {
@@ -32,6 +37,11 @@ interface ParentContextType {
   // Academic Report Data
   report: StudentAcademicReport | null;
   isLoadingReport: boolean;
+
+  /** Lịch sử từng buổi học của kỳ đang chọn (mới nhất trước) */
+  attendanceHistory: ParentAttendanceSession[];
+  /** GLV phụ trách lớp của con đang chọn (lối tắt Gọi GLV) */
+  teacherContact: ParentTeacherContact | null;
 
   // Notifications Data
   notifications: NotificationData[];
@@ -65,8 +75,13 @@ export const ParentProvider: React.FC<{
 
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(true);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(true);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+
+  // Mã yêu cầu mới nhất — bỏ qua kết quả trả về muộn khi phụ huynh đổi con/kỳ liên tục
+  const reportRequest = useRef(0);
+  const notificationRequest = useRef(0);
+  const refreshRequest = useRef(0);
 
   const selectedChild = useMemo(() => {
     return (
@@ -78,14 +93,15 @@ export const ParentProvider: React.FC<{
   // Load report data for selected child & period
   const loadReport = useCallback(
     async (childId: string, period: AcademicPeriod, delay: number = 240) => {
+      const requestId = ++reportRequest.current;
       setIsLoadingReport(true);
       try {
         const data = await fetchStudentAcademicReport(childId, period, delay);
-        setReport(data);
+        if (requestId === reportRequest.current) setReport(data);
       } catch (err) {
         console.error("Failed to load academic report:", err);
       } finally {
-        setIsLoadingReport(false);
+        if (requestId === reportRequest.current) setIsLoadingReport(false);
       }
     },
     []
@@ -94,17 +110,35 @@ export const ParentProvider: React.FC<{
   // Load notifications for selected child
   const loadNotifications = useCallback(
     async (childId: string, delay: number = 200) => {
+      const requestId = ++notificationRequest.current;
       setIsLoadingNotifications(true);
       try {
         const notifs = await fetchStudentNotifications(childId, delay);
-        setNotifications(notifs);
+        if (requestId === notificationRequest.current) setNotifications(notifs);
       } catch (err) {
         console.error("Failed to load notifications:", err);
       } finally {
-        setIsLoadingNotifications(false);
+        if (requestId === notificationRequest.current) setIsLoadingNotifications(false);
       }
     },
     []
+  );
+
+  /** Tải lại toàn bộ dữ liệu của một con (dashboard / điểm / điểm danh / thông báo). */
+  const refreshFor = useCallback(
+    async (childId: string, period: AcademicPeriod, reportDelay: number, notifDelay: number) => {
+      const requestId = ++refreshRequest.current;
+      setIsRefreshing(true);
+      await Promise.all([
+        loadReport(childId, period, reportDelay),
+        loadNotifications(childId, notifDelay),
+      ]);
+      if (requestId === refreshRequest.current) {
+        setLastRefreshedAt(new Date());
+        setIsRefreshing(false);
+      }
+    },
+    [loadReport, loadNotifications]
   );
 
   // Switch child: BẮT BUỘC refresh context dashboard/score/attendance/notification
@@ -112,18 +146,9 @@ export const ParentProvider: React.FC<{
     async (childId: string) => {
       if (childId === selectedChildId && !isRefreshing) return;
       setSelectedChildId(childId);
-      setIsRefreshing(true);
-
-      // Trigger concurrent fetch for both report and notifications
-      await Promise.all([
-        loadReport(childId, selectedPeriod, 300),
-        loadNotifications(childId, 280),
-      ]);
-
-      setLastRefreshedAt(new Date());
-      setIsRefreshing(false);
+      await refreshFor(childId, selectedPeriod, 300, 280);
     },
-    [selectedChildId, selectedPeriod, loadReport, loadNotifications, isRefreshing]
+    [selectedChildId, selectedPeriod, isRefreshing, refreshFor]
   );
 
   // Switch period
@@ -136,35 +161,16 @@ export const ParentProvider: React.FC<{
   );
 
   // Refresh all data
-  const refreshAll = useCallback(async () => {
-    setIsRefreshing(true);
-    await Promise.all([
-      loadReport(selectedChildId, selectedPeriod, 300),
-      loadNotifications(selectedChildId, 250),
-    ]);
-    setLastRefreshedAt(new Date());
-    setIsRefreshing(false);
-  }, [selectedChildId, selectedPeriod, loadReport, loadNotifications]);
+  const refreshAll = useCallback(
+    () => refreshFor(selectedChildId, selectedPeriod, 300, 250),
+    [selectedChildId, selectedPeriod, refreshFor]
+  );
 
-  // Initial load
+  // Initial load (một lần khi mount — các lần đổi con/kỳ đã tự tải lại ở trên)
   useEffect(() => {
-    let mounted = true;
-    const init = async () => {
-      setIsRefreshing(true);
-      await Promise.all([
-        loadReport(selectedChildId, selectedPeriod, 200),
-        loadNotifications(selectedChildId, 180),
-      ]);
-      if (mounted) {
-        setLastRefreshedAt(new Date());
-        setIsRefreshing(false);
-      }
-    };
-    init();
-    return () => {
-      mounted = false;
-    };
-  }, [selectedChildId, selectedPeriod, loadReport, loadNotifications]);
+    refreshFor(selectedChildId, selectedPeriod, 200, 180);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Notification actions
   const markNotificationAsRead = useCallback((id: string) => {
@@ -181,6 +187,13 @@ export const ParentProvider: React.FC<{
     return notifications.filter((n) => !n.isRead).length;
   }, [notifications]);
 
+  const attendanceHistory = useMemo(
+    () => (report ? buildAttendanceHistory(report.studentId, report.period, report.attendance) : []),
+    [report]
+  );
+
+  const teacherContact = useMemo(() => getTeacherContact(selectedChildId), [selectedChildId]);
+
   return (
     <ParentContext.Provider
       value={{
@@ -192,6 +205,8 @@ export const ParentProvider: React.FC<{
         switchPeriod,
         report,
         isLoadingReport,
+        attendanceHistory,
+        teacherContact,
         notifications,
         unreadCount,
         isLoadingNotifications,

@@ -1,5 +1,7 @@
-import React, { forwardRef, useState, useEffect } from "react";
-import { AlertCircle, Check, AlertTriangle } from "lucide-react";
+import React, { forwardRef, useEffect, useRef, useState } from "react";
+import { AlertCircle, Check } from "lucide-react";
+import { cn } from "../../lib/cn";
+import { validateScoreText } from "./scoreUtils";
 
 export type ScoreInputState =
   | "EMPTY"
@@ -34,19 +36,17 @@ export interface ScoreInputProps {
   showInlineError?: boolean;
 }
 
+function textFrom(rawInput: string | undefined, value: number | null): string {
+  if (rawInput !== undefined) return rawInput;
+  return value !== null && value !== undefined ? String(value) : "";
+}
+
 /**
- * ScoreInput Component (§22 - 03_Component_Library.md)
- *
- * States: EMPTY, FOCUS, VALID, INVALID, DISABLED, SAVED, DIRTY
- * Validation:
- * - 0 <= Score <= 10 (Thang điểm 10)
- * - Chặn và báo lỗi rõ ràng các case:
- *   + -1 -> "Điểm tối thiểu là 0"
- *   + 11 -> "Điểm tối đa là 10 (thang điểm 10)"
- *   + "abc" -> "Vui lòng nhập số hợp lệ từ 0 đến 10"
- *   + rỗng (khi required) -> "Điểm không được để trống"
- * - Hiển thị lỗi inline ngay dưới input (TUYỆT ĐỐI KHÔNG mở modal per-student)
- * - Touch-target tối thiểu 44x44px, cỡ chữ lớn 18px tối ưu cho Giáo lý viên lớn tuổi
+ * Ô nhập điểm (03 §8): số lớn font-mono, căn giữa, bàn phím số trên mobile.
+ * - DIRTY: chấm cảnh báo nhỏ ở góc · SAVED: dấu check ở góc.
+ * - INVALID: viền danger + thông báo có icon ngay dưới ô (không mở modal).
+ * - Giá trị đổi từ bên ngoài (điền nhanh, khôi phục nháp, nhập Excel) được đồng bộ
+ *   kể cả khi ô đang focus.
  */
 export const ScoreInput = forwardRef<HTMLInputElement, ScoreInputProps>(
   (
@@ -55,7 +55,7 @@ export const ScoreInput = forwardRef<HTMLInputElement, ScoreInputProps>(
       rawInput,
       min = 0,
       max = 10,
-      step = 0.5,
+      step = 0.25,
       placeholder = "—",
       disabled = false,
       readOnly = false,
@@ -75,177 +75,113 @@ export const ScoreInput = forwardRef<HTMLInputElement, ScoreInputProps>(
     },
     ref
   ) => {
-    // String representation of score for typing "8.", "8.5", "abc", etc.
-    const initialText =
-      rawInput !== undefined
-        ? rawInput
-        : value !== null && value !== undefined
-        ? String(value)
-        : "";
-
-    const [text, setText] = useState<string>(initialText);
-    const [isFocused, setIsFocused] = useState<boolean>(false);
+    const externalText = textFrom(rawInput, value);
+    const [text, setText] = useState<string>(externalText);
     const [internalError, setInternalError] = useState<string | null>(null);
+    // Chuỗi gần nhất đã gửi lên cha — để phân biệt "cha phản hồi lại" với "cha đổi giá trị".
+    const lastEmitted = useRef<string>(externalText);
 
-    // Sync when value or rawInput changes from outside
+    const validate = (str: string) => validateScoreText(str, { min, max, step, required });
+
     useEffect(() => {
-      const nextText =
-        rawInput !== undefined
-          ? rawInput
-          : value !== null && value !== undefined
-          ? String(value)
-          : "";
-      if (!isFocused || text === "") {
-        setText(nextText);
+      if (externalText !== lastEmitted.current) {
+        lastEmitted.current = externalText;
+        setText(externalText);
+        setInternalError(externalText === "" ? null : validate(externalText).error);
       }
-    }, [value, rawInput, isFocused]);
-
-    // Validation logic for 0 - 10, -1, 11, "abc", empty
-    const validateScoreString = (str: string): { parsed: number | null; error: string | null } => {
-      const trimmed = str.trim();
-      if (trimmed === "") {
-        if (required) {
-          return { parsed: null, error: "Điểm không được để trống" };
-        }
-        return { parsed: null, error: null };
-      }
-
-      // Convert comma to dot
-      const normalized = trimmed.replace(/,/g, ".");
-
-      // Check if it is a valid numeric pattern
-      if (!/^-?\d*(\.\d+)?$/.test(normalized) || normalized === "-") {
-        return {
-          parsed: null,
-          error: 'Vui lòng nhập số hợp lệ từ 0 đến 10 (không nhập chữ "' + trimmed + '")',
-        };
-      }
-
-      const num = parseFloat(normalized);
-      if (isNaN(num)) {
-        return { parsed: null, error: "Vui lòng nhập số hợp lệ" };
-      }
-
-      if (num < min) {
-        return { parsed: num, error: `Điểm không được nhỏ hơn ${min} (bạn nhập ${num})` };
-      }
-
-      if (num > max) {
-        return { parsed: num, error: `Điểm tối đa là ${max} (bạn nhập ${num})` };
-      }
-
-      return { parsed: num, error: null };
-    };
+    }, [externalText]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      setText(val);
-
-      const { parsed, error: validationErr } = validateScoreString(val);
-      setInternalError(validationErr);
-      onChange(parsed, val);
-    };
-
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-      setIsFocused(true);
-      onFocus?.(e);
+      const next = e.target.value;
+      setText(next);
+      lastEmitted.current = next;
+      const { parsed, error } = validate(next);
+      setInternalError(error);
+      onChange(parsed, next);
     };
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-      setIsFocused(false);
-      const { error: validationErr } = validateScoreString(text);
-      setInternalError(validationErr);
+      setInternalError(validate(text).error);
       onBlur?.(e);
     };
 
     const activeError = externalError !== undefined ? externalError : internalError;
     const hasError = Boolean(activeError);
-
-    // Compute UI state for styling
-    let stateStyle = "border-[#D6D3D1] bg-white text-[#1C1917] hover:border-[#A8A29E]";
-    if (disabled) {
-      stateStyle = "border-[#E7E5E4] bg-[#F5F5F4] text-[#A8A29E] cursor-not-allowed";
-    } else if (hasError) {
-      stateStyle = "border-[#DC4C4C] bg-[#FEF2F2] text-[#B4232C]";
-    } else if (isFocused) {
-      stateStyle = "border-[#B4232C] bg-white text-[#1C1917]";
-    } else if (isDirty) {
-      stateStyle = "border-[#D97706] bg-[#FFFBEB] text-[#92400E]";
-    } else if (isSaved) {
-      stateStyle = "border-[#168154] bg-[#F0FDF4] text-[#14532D]";
-    } else if (value !== null && value !== undefined) {
-      stateStyle = "border-[#A8A29E] bg-white text-[#1C1917]";
-    }
+    const errorId = id ? `${id}-error` : undefined;
+    const showDirty = !hasError && isDirty;
+    const showSaved = !hasError && !isDirty && isSaved;
 
     return (
-      <div className={`flex flex-col items-center sm:items-start ${className}`}>
+      <div className={cn("flex min-w-0 flex-col items-end md:items-start", className)}>
         <div
-          className={`
-            relative flex items-center justify-center
-            w-[90px] sm:w-[100px] h-[48px] rounded-[10px] border-2 transition-all duration-150
-            ${stateStyle}
-          `}
+          className={cn(
+            "relative flex h-12 w-24 shrink-0 items-center rounded-control border",
+            "transition-[border-color,box-shadow,background-color] duration-150 ease-out-soft",
+            "focus-within:ring-4",
+            disabled
+              ? "cursor-not-allowed border-line bg-surface-2 opacity-70"
+              : hasError
+                ? "border-danger bg-danger-soft/50 focus-within:ring-danger/15"
+                : "border-line-strong bg-surface hover:border-ink-3 focus-within:border-primary focus-within:ring-primary/15"
+          )}
         >
           <input
             ref={ref}
             id={id}
             name={name}
             type="text"
-            step={step}
             inputMode="decimal"
             enterKeyHint="next"
-            pattern="[0-9]*([.,][0-9]+)?"
             autoComplete="off"
+            spellCheck={false}
             value={text}
             placeholder={placeholder}
             disabled={disabled}
             readOnly={readOnly}
-            aria-invalid={hasError ? "true" : "false"}
-            aria-label={studentName ? `Nhập điểm cho học sinh ${studentName}` : "Nhập điểm từ 0 đến 10"}
+            required={required}
+            aria-invalid={hasError}
+            aria-describedby={hasError ? errorId : undefined}
+            aria-label={studentName ? `Điểm mới của ${studentName}` : "Nhập điểm từ 0 đến 10"}
             onChange={handleChange}
-            onFocus={handleFocus}
+            onFocus={onFocus}
             onBlur={handleBlur}
             onKeyDown={onKeyDown}
-            style={{ outline: "none", boxShadow: "none", border: "none" }}
-            className="w-full h-full bg-transparent border-0 border-none outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus:border-none focus-visible:border-none rounded-[10px] text-center font-bold text-[18px] sm:text-[19px] placeholder:text-[#A8A29E] placeholder:font-normal select-all px-1 cursor-text"
+            className={cn(
+              "size-full min-w-0 rounded-control bg-transparent px-2 text-center font-mono text-xl font-semibold tabular-nums outline-none",
+              "placeholder:font-normal placeholder:text-ink-3",
+              hasError ? "text-danger" : "text-ink",
+              disabled && "cursor-not-allowed"
+            )}
           />
 
-          {/* Indicator icons inside corner */}
-          {hasError && (
-            <div
-              className="absolute right-1.5 top-1.5 text-[#DC4C4C] pointer-events-none"
-              title={activeError || "Lỗi điểm không hợp lệ"}
+          {showDirty && (
+            <span
+              className="pointer-events-none absolute -top-1 -right-1 size-2.5 rounded-full bg-warning ring-2 ring-surface"
+              title="Chưa lưu"
             >
-              <AlertCircle className="w-3.5 h-3.5" />
-            </div>
+              <span className="sr-only">Chưa lưu</span>
+            </span>
           )}
-          {!hasError && isDirty && (
-            <div
-              className="absolute right-1.5 top-1.5 text-[#D97706] pointer-events-none"
-              title="Có thay đổi chưa lưu"
+          {showSaved && (
+            <span
+              className="pointer-events-none absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-success text-on-solid ring-2 ring-surface"
+              title="Đã lưu"
             >
-              <span className="w-2 h-2 rounded-full bg-[#D97706] inline-block animate-pulse" />
-            </div>
-          )}
-          {!hasError && isSaved && !isDirty && (
-            <div
-              className="absolute right-1.5 top-1.5 text-[#168154] pointer-events-none"
-              title="Đã lưu thành công"
-            >
-              <Check className="w-3.5 h-3.5" />
-            </div>
+              <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+              <span className="sr-only">Đã lưu</span>
+            </span>
           )}
         </div>
 
-        {/* Inline Error Message - NO MODAL */}
         {showInlineError && hasError && activeError && (
-          <div
-            role="alert"
-            className="mt-1 max-w-[220px] text-[12px] font-semibold text-[#B4232C] bg-[#FFF1F2] px-2 py-0.5 rounded border border-[#FECDD3] flex items-center gap-1 shadow-xs"
+          <p
+            id={errorId}
+            aria-live="polite"
+            className="mt-1.5 flex max-w-56 items-start gap-1.5 text-sm font-medium leading-snug text-danger"
           >
-            <AlertTriangle className="w-3 h-3 flex-shrink-0 text-[#DC4C4C]" />
-            <span className="break-words leading-tight">{activeError}</span>
-          </div>
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>{activeError}</span>
+          </p>
         )}
       </div>
     );

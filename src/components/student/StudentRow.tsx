@@ -1,9 +1,10 @@
 import React from "react";
+import { CheckCircle2, XCircle, Clock, ChevronRight, FileCheck2 } from "lucide-react";
+import { cn } from "../../lib/cn";
 import { Checkbox } from "../ui/Checkbox";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Student, AttendanceStatus } from "../../types";
-import { CheckCircle2, XCircle, Clock, ChevronRight } from "lucide-react";
 
 export interface StudentRowProps {
   student: Student;
@@ -18,30 +19,31 @@ export interface StudentRowProps {
   className?: string;
 }
 
+/** Badge trạng thái điểm danh — luôn icon + chữ (01 §3.5). */
 const getAttendanceBadge = (status?: AttendanceStatus) => {
   switch (status) {
     case "PRESENT":
       return (
-        <Badge variant="success" size="sm" icon={<CheckCircle2 className="w-3 h-3" />}>
+        <Badge variant="success" size="sm" icon={<CheckCircle2 />}>
           Có mặt
         </Badge>
       );
     case "ABSENT":
       return (
-        <Badge variant="error" size="sm" icon={<XCircle className="w-3 h-3" />}>
+        <Badge variant="error" size="sm" icon={<XCircle />}>
           Vắng
         </Badge>
       );
     case "EXCUSED":
       return (
-        <Badge variant="warning" size="sm" icon={<Clock className="w-3 h-3" />}>
+        <Badge variant="info" size="sm" icon={<FileCheck2 />}>
           Có phép
         </Badge>
       );
     case "LATE":
       return (
-        <Badge variant="info" size="sm" icon={<Clock className="w-3 h-3" />}>
-          Muộn
+        <Badge variant="warning" size="sm" icon={<Clock />}>
+          Đi muộn
         </Badge>
       );
     default:
@@ -50,10 +52,8 @@ const getAttendanceBadge = (status?: AttendanceStatus) => {
 };
 
 /**
- * StudentRow Component (§19 03_Component_Library)
- *
- * Dùng trong danh sách học sinh, bảng điểm danh, bảng quản trị lớp.
- * Hỗ trợ chọn đơn (Individual Select), xem điểm và trạng thái chuyên cần.
+ * StudentRow (03 §10) — dòng học sinh trong danh sách, bộ chọn, bảng quản trị lớp.
+ * Hỗ trợ chọn từng em, hiển thị điểm và trạng thái chuyên cần.
  */
 export const StudentRow: React.FC<StudentRowProps> = ({
   student,
@@ -65,9 +65,10 @@ export const StudentRow: React.FC<StudentRowProps> = ({
   score,
   attendanceStatus,
   showClassBadge = true,
-  className = "",
+  className,
 }) => {
   const { id, code, orderNumber, name, christianName, className: studentClassName, avatarUrl } = student;
+  const interactive = Boolean(onSelect || onClick);
 
   const handleRowClick = () => {
     if (disabled) return;
@@ -81,29 +82,33 @@ export const StudentRow: React.FC<StudentRowProps> = ({
   return (
     <div
       onClick={handleRowClick}
-      role="row"
-      tabIndex={disabled ? -1 : 0}
+      role={interactive ? "button" : undefined}
+      aria-pressed={onSelect ? selected : undefined}
+      aria-disabled={disabled || undefined}
+      tabIndex={interactive && !disabled ? 0 : -1}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (!disabled && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           handleRowClick();
         }
       }}
-      className={`group flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 rounded-xl border transition-all text-left ${
+      className={cn(
+        "group flex min-h-14 items-center justify-between gap-3 rounded-control border px-3 py-2.5 text-left sm:px-4",
+        "transition-[background-color,border-color] duration-150 ease-out-soft",
+        "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50",
         disabled
-          ? "opacity-50 cursor-not-allowed bg-[#FAFAF9] border-[#E7E5E4]"
+          ? "cursor-not-allowed border-line bg-surface-2 opacity-50"
           : selected
-          ? "bg-[#FFF1F2]/30 border-[#B4232C]/40 shadow-xs cursor-pointer"
-          : "bg-white hover:bg-[#FAFAF9] border-[#E7E5E4] cursor-pointer"
-      } ${className}`}
+            ? "cursor-pointer border-primary/40 bg-primary-soft/50"
+            : cn("border-line bg-surface", interactive && "cursor-pointer hover:bg-surface-2"),
+        className
+      )}
     >
-      {/* Left: Checkbox + STT + Avatar + Name */}
-      <div className="flex items-center gap-3 min-w-0">
+      {/* Trái: Checkbox + STT + Avatar + Tên */}
+      <div className="flex min-w-0 items-center gap-3">
         {showCheckbox && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="flex-shrink-0 flex items-center"
-          >
+          <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center">
             <Checkbox
               checked={selected}
               disabled={disabled}
@@ -113,53 +118,45 @@ export const StudentRow: React.FC<StudentRowProps> = ({
           </div>
         )}
 
-        <div className="w-7 text-center font-mono text-[12px] font-semibold text-[#78716C] flex-shrink-0">
+        <div className="w-7 shrink-0 text-center font-mono text-sm font-semibold text-ink-3">
           {orderNumber ? String(orderNumber).padStart(2, "0") : code}
         </div>
 
-        <Avatar
-          name={name}
-          src={avatarUrl || undefined}
-          size="sm"
-          className="flex-shrink-0"
-        />
+        <Avatar name={name} src={avatarUrl || undefined} size="sm" className="shrink-0" />
 
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {christianName && (
-              <span className="text-[12px] text-[#78716C] font-medium">
-                {christianName}
-              </span>
-            )}
-            <span className="text-[14px] sm:text-[14.5px] font-semibold text-[#1C1917] group-hover:text-[#B4232C] transition-colors truncate">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {christianName && <span className="shrink-0 text-sm font-medium text-ink-2">{christianName}</span>}
+            <span className="truncate text-base font-semibold text-ink transition-colors group-hover:text-primary-ink">
               {name}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[#A8A29E]">
-            <span className="font-mono">Mã: {code}</span>
+          <div className="mt-0.5 flex items-center gap-2 text-sm text-ink-3">
+            <span className="font-mono text-xs">Mã: {code}</span>
             {showClassBadge && studentClassName && (
-              <span className="text-[#57534E] font-medium">
-                · {studentClassName}
-              </span>
+              <span className="truncate font-medium text-ink-2">· {studentClassName}</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Right: Attendance / Score info + optional action */}
-      <div className="flex items-center gap-3 flex-shrink-0">
+      {/* Phải: Điểm danh / Điểm + mũi tên */}
+      <div className="flex shrink-0 items-center gap-3">
         {attendanceStatus && getAttendanceBadge(attendanceStatus)}
 
         {score !== undefined && score !== null && (
           <div className="text-right">
-            <span className="text-[14px] font-bold text-[#B4232C]">{score.toFixed(1)}</span>
-            <span className="text-[11px] text-[#78716C] ml-1">đ</span>
+            <span className="font-mono text-base font-semibold text-ink">{score.toFixed(1)}</span>
+            <span className="ml-1 text-xs text-ink-3">đ</span>
           </div>
         )}
 
         {onClick && (
-          <ChevronRight className="w-4 h-4 text-[#A8A29E] group-hover:text-[#B4232C] group-hover:translate-x-0.5 transition-all" />
+          <ChevronRight
+            className="size-4 text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-ink"
+            aria-hidden="true"
+          />
         )}
       </div>
     </div>

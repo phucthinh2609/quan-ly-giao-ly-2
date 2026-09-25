@@ -1,33 +1,33 @@
 import React from "react";
 import { Inbox } from "lucide-react";
+import { IconTile } from "./IconTile";
+import { cn } from "../../lib/cn";
+import { Tone } from "./tone";
 
 export interface EmptyStateProps {
-  /**
-   * Icon trung tâm (mặc định là biểu tượng Inbox rỗng)
-   */
+  /** Icon trung tâm (mặc định Inbox) */
   icon?: React.ReactNode;
-  /**
-   * Tiêu đề trạng thái rỗng
-   */
+  /** Tiêu đề trạng thái rỗng */
   title: string;
-  /**
-   * Mô tả chi tiết hoặc hướng dẫn người dùng
-   */
+  /** Mô tả hoặc hướng dẫn */
   description?: React.ReactNode;
-  /**
-   * Nút hành động kêu gọi (CTA Button khi phù hợp)
-   */
+  /** Nút hành động (khi phù hợp) */
   action?: React.ReactNode;
-  /**
-   * Kích cỡ khoảng cách và icon
-   */
+  /** Khoảng cách và cỡ icon */
   size?: "sm" | "md" | "lg";
   className?: string;
+  /** Tone của IconTile (mặc định neutral; khu Học sinh có thể dùng kid palette) */
+  tone?: Tone;
 }
 
+const sizeStyles = {
+  sm: { padding: "px-4 py-6", tile: "lg" as const, title: "text-base", desc: "text-sm max-w-xs" },
+  md: { padding: "px-6 py-10", tile: "xl" as const, title: "text-lg", desc: "text-base max-w-sm" },
+  lg: { padding: "px-6 py-16", tile: "xl" as const, title: "text-xl", desc: "text-base max-w-md" },
+};
+
 /**
- * EmptyState Component (§18 - 03_Component_Library & Wireframe §13)
- * Chuẩn hiển thị: icon + title + description + action (khi phù hợp).
+ * EmptyState (03 §5, 04 §17): IconTile + tiêu đề + mô tả + hành động.
  */
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
@@ -36,64 +36,26 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   action,
   size = "md",
   className = "",
+  tone = "neutral",
 }) => {
-  const sizeStyles = {
-    sm: {
-      padding: "py-6 px-4",
-      iconBox: "w-12 h-12 text-[20px]",
-      title: "text-[16px]",
-      desc: "text-[13px] max-w-xs",
-    },
-    md: {
-      padding: "py-10 px-6",
-      iconBox: "w-16 h-16 text-[28px]",
-      title: "text-[18px] sm:text-[20px]",
-      desc: "text-[14px] sm:text-[15px] max-w-sm",
-    },
-    lg: {
-      padding: "py-16 px-6",
-      iconBox: "w-20 h-20 text-[36px]",
-      title: "text-[22px] sm:text-[24px]",
-      desc: "text-[15px] sm:text-[16px] max-w-md",
-    },
-  }[size];
-
-  const defaultIcon = <Inbox className="w-8 h-8 text-[#78716C]" />;
+  const styles = sizeStyles[size];
 
   return (
     <div
       role="status"
-      className={`
-        flex flex-col items-center justify-center text-center bg-white rounded-[14px] border border-[#E7E5E4]
-        ${sizeStyles.padding}
-        ${className}
-      `}
-    >
-      {/* Icon trung tâm với nền dịu */}
-      <div
-        className={`
-          flex items-center justify-center rounded-2xl bg-[#F5F5F4] text-[#B4232C] mb-4 shadow-2xs
-          ${sizeStyles.iconBox}
-        `}
-        aria-hidden="true"
-      >
-        {icon || defaultIcon}
-      </div>
-
-      {/* Tiêu đề Serif rõ ràng */}
-      <h3 className={`font-bold font-serif text-[#1C1917] tracking-tight ${sizeStyles.title}`}>
-        {title}
-      </h3>
-
-      {/* Mô tả phụ */}
-      {description && (
-        <p className={`text-[#57534E] mt-1.5 leading-relaxed ${sizeStyles.desc}`}>
-          {description}
-        </p>
+      className={cn(
+        "flex flex-col items-center justify-center rounded-card border border-dashed border-line-strong bg-surface text-center",
+        styles.padding,
+        className
       )}
+    >
+      <IconTile icon={icon || <Inbox />} tone={tone} size={styles.tile} className="mb-4" />
 
-      {/* Nút hành động bổ trợ */}
-      {action && <div className="mt-5 flex items-center justify-center">{action}</div>}
+      <h3 className={cn("font-semibold tracking-tight text-ink", styles.title)}>{title}</h3>
+
+      {description && <p className={cn("mt-1.5 leading-relaxed text-ink-2", styles.desc)}>{description}</p>}
+
+      {action && <div className="mt-5 flex flex-wrap items-center justify-center gap-2">{action}</div>}
     </div>
   );
 };

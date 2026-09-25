@@ -1,8 +1,13 @@
-import React, { useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useRef, useImperativeHandle, forwardRef, useState } from "react";
+import { FileSpreadsheet, Keyboard } from "lucide-react";
 import { Student, ScoreEntry } from "../../types";
-import { ScoreRow } from "./ScoreRow";
 import { EmptyState } from "../ui/EmptyState";
-import { FileSpreadsheet } from "lucide-react";
+import { Card } from "../ui/Card";
+import { cn } from "../../lib/cn";
+import { prefersReducedMotion } from "../../lib/motion";
+import { ScoreRow } from "./ScoreRow";
+import { QuickFillBar, QUICK_FILL_VALUES } from "./QuickFillBar";
+import { useMediaQuery } from "./scoreUtils";
 
 export interface ScoreTableRef {
   focusStudent: (studentId: string) => void;
@@ -17,16 +22,33 @@ export interface ScoreTableProps {
   disabled?: boolean;
   readOnly?: boolean;
   className?: string;
+  /**
+   * Danh sách học sinh vừa được lưu (hiện dấu check). Không truyền → mọi điểm hợp lệ
+   * chưa sửa đều coi là đã lưu (hành vi v1).
+   */
+  savedStudentIds?: ReadonlySet<string> | string[];
+  /** Hiện dải chip điền nhanh khi focus trên mobile. Mặc định true. */
+  showQuickFill?: boolean;
+  /** Giá trị chip điền nhanh. Mặc định 10 · 9 · 8 · 7 · 6 · 5 */
+  quickFillValues?: number[];
+  /** Hiện gợi ý phím tắt trên desktop. Mặc định true. */
+  showKeyboardHint?: boolean;
 }
 
+const INPUT_ID_PREFIX = "score-input-";
+
+const Kbd: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-xs border border-line-strong bg-surface px-1.5 font-mono text-xs font-semibold text-ink-2 shadow-xs">
+    {children}
+  </kbd>
+);
+
 /**
- * ScoreTable Component (§22 - 03_Component_Library.md & Sitemap §9)
- *
- * Yêu cầu then chốt:
- * 1. Desktop table header có sticky (`sticky top-0 z-10 bg-white border-b shadow-xs`)
- * 2. Keyboard flow desktop: Enter hoặc Tab -> tự động chuyển con trỏ sang học sinh tiếp theo (onKeyDown handler)
- * 3. Hỗ trợ ref để focusStudent(studentId) cuộn vào vị trí và focus input khi click từ ScoreValidationSummary
- * 4. Không mở modal cho từng học sinh.
+ * Bảng nhập điểm (03 §8).
+ * - Desktop (≥ md): bảng có header sticky, cuộn trong khung riêng.
+ * - Mobile: danh sách thẻ gọn + dải chip điền nhanh khi đang nhập.
+ * - Phím: Enter / Tab / ↓ → em kế tiếp · Shift+Tab / ↑ → em trước · Esc → thoát ô.
+ * - Ref `focusStudent(id)`: cuộn tới và focus ô của học sinh (dùng từ tóm tắt lỗi).
  */
 export const ScoreTable = forwardRef<ScoreTableRef, ScoreTableProps>(
   (
@@ -39,134 +61,202 @@ export const ScoreTable = forwardRef<ScoreTableRef, ScoreTableProps>(
       disabled = false,
       readOnly = false,
       className = "",
+      savedStudentIds,
+      showQuickFill = true,
+      quickFillValues = QUICK_FILL_VALUES,
+      showKeyboardHint = true,
     },
     ref
   ) => {
-    // Map of input refs by studentId
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    const isDesktop = useMediaQuery("(min-width: 48rem)");
+    const [focusedId, setFocusedId] = useState<string | null>(null);
 
-    // Expose focus method to parent
+    const savedSet: ReadonlySet<string> | null =
+      savedStudentIds === undefined
+        ? null
+        : Array.isArray(savedStudentIds)
+          ? new Set(savedStudentIds)
+          : (savedStudentIds as ReadonlySet<string>);
+
+    const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? "auto" : "smooth");
+
+    const focusInput = (input: HTMLInputElement | null | undefined, block: ScrollLogicalPosition) => {
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.select();
+      input.scrollIntoView({ behavior: scrollBehavior(), block });
+    };
+
+    const focusIndex = (index: number) => {
+      const target = students[index];
+      if (!target) return;
+      // Mobile: đưa ô ra giữa màn hình để không bị thanh Lưu / chip điền nhanh che
+      focusInput(inputRefs.current[target.id], isDesktop ? "nearest" : "center");
+    };
+
     useImperativeHandle(ref, () => ({
       focusStudent: (studentId: string) => {
         const inputElem = inputRefs.current[studentId];
         if (inputElem) {
-          inputElem.scrollIntoView({ behavior: "smooth", block: "center" });
-          inputElem.focus();
-          // Highlight select text if any
-          inputElem.select();
+          focusInput(inputElem, "center");
         } else {
-          // Fallback to row
           const rowElem = document.getElementById(`score-row-${studentId}`);
-          rowElem?.scrollIntoView({ behavior: "smooth", block: "center" });
+          rowElem?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
         }
       },
     }));
 
-    // Keyboard navigation: Enter / Tab / ArrowDown -> Next student
-    // Shift+Tab / ArrowUp -> Previous student
-    const handleKeyDown = (
-      e: React.KeyboardEvent<HTMLInputElement>,
-      currentIndex: number
-    ) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIndex: number) => {
       if (e.key === "Enter" || e.key === "Tab") {
-        // Tab without shift or Enter advances to next student
-        // Shift + Tab moves to previous student
+        // Shift + Tab về em trước; Tab / Enter sang em kế tiếp
         const isBackward = e.key === "Tab" && e.shiftKey;
         const targetIndex = isBackward ? currentIndex - 1 : currentIndex + 1;
-
         if (targetIndex >= 0 && targetIndex < students.length) {
           e.preventDefault();
-          const targetStudent = students[targetIndex];
-          const targetInput = inputRefs.current[targetStudent.id];
-          if (targetInput) {
-            targetInput.focus();
-            targetInput.select();
-          }
+          focusIndex(targetIndex);
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
         }
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < students.length) {
-          const nextInput = inputRefs.current[students[nextIndex].id];
-          nextInput?.focus();
-          nextInput?.select();
-        }
+        if (currentIndex + 1 < students.length) focusIndex(currentIndex + 1);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        const prevIndex = currentIndex - 1;
-        if (prevIndex >= 0) {
-          const prevInput = inputRefs.current[students[prevIndex].id];
-          prevInput?.focus();
-          prevInput?.select();
-        }
+        if (currentIndex - 1 >= 0) focusIndex(currentIndex - 1);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.currentTarget.blur();
+      }
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      const next = e.relatedTarget as HTMLElement | null;
+      // Chuyển giữa các ô điểm → giữ dải điền nhanh, tránh nhấp nháy
+      if (next && next.id && next.id.startsWith(INPUT_ID_PREFIX)) return;
+      setFocusedId(null);
+    };
+
+    const handleQuickFill = (value: number) => {
+      if (!focusedId) return;
+      const index = students.findIndex((s) => s.id === focusedId);
+      if (index < 0) return;
+      onScoreChange(focusedId, value, String(value));
+      if (index + 1 < students.length) {
+        focusIndex(index + 1);
+      } else {
+        inputRefs.current[focusedId]?.blur();
       }
     };
 
     if (students.length === 0) {
       return (
         <EmptyState
-          icon={<FileSpreadsheet className="w-10 h-10 text-[#A8A29E]" />}
-          title="Chưa có học sinh nào"
-          description="Lớp học này hiện chưa có danh sách học sinh để nhập điểm."
+          icon={<FileSpreadsheet className="size-8" />}
+          title="Lớp chưa có học sinh"
+          description="Khi lớp có danh sách học sinh, bảng nhập điểm sẽ hiện ở đây."
         />
       );
     }
 
+    const layout = isDesktop ? "table" : "card";
+
+    const rows = students.map((student, index) => {
+      const entry = scores[student.id];
+      const scoreVal = entry ? entry.score : null;
+      const rawVal = entry ? entry.rawInput : undefined;
+      const prevVal = previousScores[student.id] ?? entry?.previousScore ?? null;
+      const errorMsg = entry?.error;
+      const isDirty = Boolean(entry?.isDirty);
+      const isSaved = savedSet
+        ? savedSet.has(student.id) && !isDirty && !errorMsg
+        : !isDirty && scoreVal !== null && !errorMsg;
+
+      return (
+        <ScoreRow
+          key={student.id}
+          ref={(el) => {
+            inputRefs.current[student.id] = el;
+          }}
+          layout={layout}
+          student={student}
+          score={scoreVal}
+          rawInput={rawVal}
+          previousScore={prevVal}
+          error={errorMsg}
+          isDirty={isDirty}
+          isSaved={isSaved}
+          disabled={disabled}
+          readOnly={readOnly}
+          isHighlighted={highlightedStudentId === student.id}
+          onScoreChange={onScoreChange}
+          onKeyDown={(e) => handleKeyDown(e, index)}
+          onFocus={() => setFocusedId(student.id)}
+          onBlur={handleBlur}
+        />
+      );
+    });
+
+    const focusedStudent = focusedId ? students.find((s) => s.id === focusedId) : undefined;
+    const quickFillVisible = showQuickFill && !isDesktop && !disabled && !readOnly && Boolean(focusedStudent);
+    const th = "sticky top-0 z-10 border-b border-line bg-surface-2 px-4 py-3 text-sm font-semibold text-ink-2";
+
     return (
-      <div className={`w-full overflow-hidden bg-white rounded-[14px] border border-[#E7E5E4] shadow-xs ${className}`}>
-        <div className="overflow-x-auto max-h-[calc(100vh-280px)] min-h-[400px]">
-          <table className="w-full text-left border-collapse">
-            {/* Desktop Table Header - MUST BE STICKY (Checklist #7) */}
-            <thead className="sticky top-0 z-10 bg-white border-b-2 border-[#E7E5E4] shadow-xs">
-              <tr className="text-[12px] sm:text-[13px] font-bold text-[#57534E] uppercase tracking-wider bg-[#FAFAF9]">
-                <th className="py-3 px-3 sm:px-4 text-center w-[60px] sm:w-[70px]">STT</th>
-                <th className="py-3 px-3 sm:px-4 min-w-[200px]">Học sinh & Tên Thánh</th>
-                <th className="py-3 px-3 sm:px-4 text-center w-[110px] hidden md:table-cell">Điểm cũ</th>
-                <th className="py-3 px-3 sm:px-4 w-[160px] sm:w-[180px]">
-                  Điểm mới (0–10)
-                </th>
-                <th className="py-3 px-3 sm:px-4 text-center w-[120px] hidden sm:table-cell">
-                  Trạng thái
-                </th>
-              </tr>
-            </thead>
+      <div className={cn("space-y-3", className)}>
+        {isDesktop ? (
+          <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <div className="max-h-[calc(100dvh_-_14rem)] overflow-auto">
+              <table className="w-full border-separate border-spacing-0 text-left">
+                <caption className="sr-only">Bảng nhập điểm, {students.length} học sinh</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className={cn(th, "w-16 text-center")}>
+                      STT
+                    </th>
+                    <th scope="col" className={th}>
+                      Học sinh
+                    </th>
+                    <th scope="col" className={cn(th, "w-28 text-center")}>
+                      Điểm cũ
+                    </th>
+                    <th scope="col" className={cn(th, "w-60")}>
+                      Điểm mới
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <Card padding="none" className="overflow-hidden">
+            <ul aria-label={`Danh sách ${students.length} học sinh`} className="divide-y divide-line">
+              {rows}
+            </ul>
+          </Card>
+        )}
 
-            {/* Table Body with Rows */}
-            <tbody className="divide-y divide-[#F5F5F4] text-[14px]">
-              {students.map((student, index) => {
-                const entry = scores[student.id];
-                const scoreVal = entry ? entry.score : null;
-                const rawVal = entry ? entry.rawInput : undefined;
-                const prevVal = previousScores[student.id] ?? entry?.previousScore ?? null;
-                const errorMsg = entry?.error;
-                const isDirty = Boolean(entry?.isDirty);
-                const isSaved = !isDirty && scoreVal !== null && !errorMsg;
-                const isHighlighted = highlightedStudentId === student.id;
+        {showKeyboardHint && isDesktop && !readOnly && (
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-3">
+            <Keyboard className="size-4 shrink-0" aria-hidden="true" />
+            <Kbd>Enter</Kbd>
+            <span>hoặc</span>
+            <Kbd>↓</Kbd>
+            <span>để sang em kế tiếp</span>
+            <span aria-hidden="true">·</span>
+            <Kbd>↑</Kbd>
+            <span>về em trước</span>
+          </p>
+        )}
 
-                return (
-                  <ScoreRow
-                    key={student.id}
-                    ref={(el) => {
-                      inputRefs.current[student.id] = el;
-                    }}
-                    student={student}
-                    score={scoreVal}
-                    rawInput={rawVal}
-                    previousScore={prevVal}
-                    error={errorMsg}
-                    isDirty={isDirty}
-                    isSaved={isSaved}
-                    disabled={disabled}
-                    readOnly={readOnly}
-                    isHighlighted={isHighlighted}
-                    onScoreChange={onScoreChange}
-                    onKeyDown={(e) => handleKeyDown(e, index)}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {quickFillVisible && focusedStudent && (
+          <QuickFillBar
+            values={quickFillValues}
+            targetName={`${focusedStudent.christianName || ""} ${focusedStudent.name}`.trim()}
+            onPick={handleQuickFill}
+          />
+        )}
       </div>
     );
   }

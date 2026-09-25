@@ -1,50 +1,36 @@
-import React, { useState, useMemo } from "react";
-import { Search, CheckSquare, Square, X, Filter, Users } from "lucide-react";
+import React, { useState, useMemo, useId } from "react";
+import { Search, SquareCheckBig, Square, X, Filter, Users } from "lucide-react";
+import { cn } from "../../lib/cn";
 import { StudentRow } from "./StudentRow";
 import { Student } from "../../types";
 import { Button } from "../ui/Button";
+import { IconTile } from "../ui/IconTile";
 
 export interface StudentSelectorProps {
-  /**
-   * Danh sách toàn bộ học sinh có sẵn
-   */
+  /** Danh sách toàn bộ học sinh có sẵn */
   students: Student[];
-  /**
-   * Danh sách ID học sinh đang được chọn
-   */
+  /** Danh sách ID học sinh đang được chọn */
   selectedIds: string[];
-  /**
-   * Callback khi danh sách chọn thay đổi
-   */
+  /** Callback khi danh sách chọn thay đổi */
   onChange: (selectedIds: string[]) => void;
-  /**
-   * Tiêu đề của khối chọn học sinh
-   */
+  /** Tiêu đề của khối chọn học sinh */
   title?: string;
-  /**
-   * Placeholder ô tìm kiếm
-   */
+  /** Placeholder ô tìm kiếm */
   placeholder?: string;
-  /**
-   * Có cho phép lọc theo lớp học hay không
-   */
+  /** Có cho phép lọc theo lớp học hay không */
   showClassFilter?: boolean;
-  /**
-   * Chiều cao tối đa danh sách cuộn
-   */
+  /** Class chiều cao tối đa danh sách cuộn (VD "max-h-96") */
   maxHeight?: string;
   className?: string;
 }
 
 /**
- * StudentSelector Component (§19 03_Component_Library)
- *
- * Ràng buộc bắt buộc:
- * - Search: Lọc trực tiếp theo tên, tên Thánh, mã học sinh
- * - Select All: Chọn toàn bộ kết quả lọc hoặc toàn bộ danh sách
- * - Individual Select: Tích chọn từng dòng học sinh
- * - Selected Count: Hiển thị số lượng "Đã chọn X/Y học sinh"
- * - Clear: Nút xoá toàn bộ lựa chọn hiện thời
+ * StudentSelector (03 §10) — dùng trong trang quản lý.
+ * - Tìm theo tên, tên Thánh, mã học sinh
+ * - Chọn tất cả kết quả lọc / bỏ chọn
+ * - Chọn từng em
+ * - Đếm "Đã chọn X/Y học sinh"
+ * - Bỏ chọn tất cả
  */
 export const StudentSelector: React.FC<StudentSelectorProps> = ({
   students,
@@ -53,13 +39,14 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   title = "Chọn học sinh",
   placeholder = "Tìm theo tên, tên Thánh, mã số...",
   showClassFilter = true,
-  maxHeight = "max-h-[380px]",
-  className = "",
+  maxHeight = "max-h-96",
+  className,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClass, setSelectedClass] = useState<string>("ALL");
+  const searchId = useId();
+  const classFilterId = useId();
 
-  // Extract unique classes for filter
   const classList = useMemo(() => {
     const set = new Set<string>();
     students.forEach((s) => {
@@ -68,7 +55,6 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     return Array.from(set);
   }, [students]);
 
-  // Filter students by search term and class
   const filteredStudents = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return students.filter((s) => {
@@ -92,15 +78,11 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     return filteredStudents.some((s) => selectedIds.includes(s.id));
   }, [filteredStudents, selectedIds]);
 
-  // Actions
   const handleSelectAll = () => {
     if (allFilteredSelected) {
-      // Unselect all filtered students
       const filteredIdSet = new Set(filteredStudents.map((s) => s.id));
-      const next = selectedIds.filter((id) => !filteredIdSet.has(id));
-      onChange(next);
+      onChange(selectedIds.filter((id) => !filteredIdSet.has(id)));
     } else {
-      // Select all filtered students
       const merged = new Set([...selectedIds, ...filteredStudents.map((s) => s.id)]);
       onChange(Array.from(merged));
     }
@@ -121,87 +103,86 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   };
 
   return (
-    <div
-      className={`bg-white rounded-[14px] border border-[#E7E5E4] p-4 sm:p-5 shadow-xs space-y-4 ${className}`}
-    >
-      {/* Header: Title + Selected Count + Clear */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#F5F5F4]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-[#B4232C]">
-            <Users className="w-4 h-4" />
-          </div>
+    <div className={cn("space-y-4 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5", className)}>
+      {/* Tiêu đề + số đã chọn + hành động */}
+      <div className="flex flex-col justify-between gap-3 border-b border-line pb-4 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-3">
+          <IconTile icon={<Users />} tone="primary" size="md" />
           <div>
-            <h3 className="text-[16px] sm:text-[17px] font-bold text-[#1C1917] font-serif">
-              {title}
-            </h3>
-            <p className="text-[12px] text-[#78716C]">
-              Đã chọn: <span className="font-bold text-[#B4232C]">{selectedIds.length}</span> / {students.length} học sinh
+            <h3 className="text-lg font-semibold tracking-tight text-ink">{title}</h3>
+            <p className="text-sm text-ink-2" aria-live="polite">
+              Đã chọn <span className="font-mono font-semibold text-ink">{selectedIds.length}</span> / {students.length}{" "}
+              học sinh
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           {selectedIds.length > 0 && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={handleClear}
-              leftIcon={<X className="w-3.5 h-3.5" />}
-              className="text-[#DC4C4C] hover:text-[#A52D2D] hover:bg-[#FEF2F2] border-[#FEE2E2]"
+              leftIcon={<X />}
+              className="text-danger hover:bg-danger-soft hover:text-danger"
             >
               Bỏ chọn tất cả ({selectedIds.length})
             </Button>
           )}
 
           <Button
-            variant={allFilteredSelected ? "secondary" : "outline"}
+            variant={allFilteredSelected ? "soft" : "outline"}
             size="sm"
             onClick={handleSelectAll}
             disabled={filteredStudents.length === 0}
-            leftIcon={
-              allFilteredSelected ? (
-                <CheckSquare className="w-3.5 h-3.5 text-[#B4232C]" />
-              ) : (
-                <Square className="w-3.5 h-3.5" />
-              )
-            }
+            leftIcon={allFilteredSelected ? <SquareCheckBig /> : <Square />}
           >
-            {allFilteredSelected ? "Bỏ chọn trang này" : "Chọn tất cả lọc"}
+            {allFilteredSelected ? "Bỏ chọn kết quả lọc" : "Chọn tất cả kết quả"}
           </Button>
         </div>
       </div>
 
-      {/* Search and Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-2.5">
-        {/* Search Input */}
+      {/* Tìm kiếm + lọc lớp */}
+      <div className="flex flex-col gap-2.5 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
+          <label htmlFor={searchId} className="sr-only">
+            Tìm học sinh
+          </label>
+          <Search
+            className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-ink-3"
+            aria-hidden="true"
+          />
           <input
-            type="text"
+            id={searchId}
+            type="search"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={placeholder}
-            className="w-full pl-9 pr-8 py-2 text-[13.5px] rounded-lg border border-[#E7E5E4] focus:outline-none focus:ring-2 focus:ring-[#B4232C]/30 focus:border-[#B4232C] transition-all bg-[#FAFAF9]"
+            className="h-12 w-full rounded-full border border-line bg-surface-2 pr-11 pl-11 text-base text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none"
           />
           {searchTerm && (
             <button
               type="button"
               onClick={() => setSearchTerm("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#A8A29E] hover:text-[#57534E] p-0.5 cursor-pointer"
+              aria-label="Xóa từ khóa"
+              className="absolute top-1/2 right-1.5 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-ink-3 hover:bg-surface-3 hover:text-ink focus-visible:outline-3"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="size-4" aria-hidden="true" />
             </button>
           )}
         </div>
 
-        {/* Class Filter (Optional) */}
         {showClassFilter && classList.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <Filter className="w-3.5 h-3.5 text-[#78716C] hidden sm:inline" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Filter className="hidden size-4 text-ink-3 sm:inline" aria-hidden="true" />
+            <label htmlFor={classFilterId} className="sr-only">
+              Lọc theo lớp
+            </label>
             <select
+              id={classFilterId}
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="py-2 px-3 text-[13px] rounded-lg border border-[#E7E5E4] bg-[#FAFAF9] text-[#292524] focus:outline-none focus:ring-2 focus:ring-[#B4232C]/30 cursor-pointer"
+              className="h-12 w-full cursor-pointer rounded-control border border-line-strong bg-surface px-4 text-base text-ink focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none sm:w-auto"
             >
               <option value="ALL">Tất cả lớp ({students.length})</option>
               {classList.map((c) => (
@@ -214,37 +195,32 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
         )}
       </div>
 
-      {/* Student List */}
-      <div className={`space-y-2 overflow-y-auto pr-1 ${maxHeight}`}>
+      {/* Danh sách */}
+      <div className={cn("space-y-2 overflow-y-auto pr-1", maxHeight)}>
         {filteredStudents.length === 0 ? (
-          <div className="py-8 text-center text-[#78716C] text-[13px] bg-[#FAFAF9] rounded-xl border border-dashed border-[#E7E5E4]">
-            Không tìm thấy học sinh nào phù hợp từ khóa &quot;{searchTerm}&quot;
+          <div className="rounded-control border border-dashed border-line-strong bg-surface-2 px-4 py-8 text-center text-sm text-ink-2">
+            Không tìm thấy học sinh nào phù hợp{searchTerm ? ` với từ khóa "${searchTerm}"` : ""}
           </div>
         ) : (
-          filteredStudents.map((student) => {
-            const isSelected = selectedIds.includes(student.id);
-            return (
-              <StudentRow
-                key={student.id}
-                student={student}
-                selected={isSelected}
-                onSelect={handleToggleStudent}
-                showCheckbox={true}
-              />
-            );
-          })
+          filteredStudents.map((student) => (
+            <StudentRow
+              key={student.id}
+              student={student}
+              selected={selectedIds.includes(student.id)}
+              onSelect={handleToggleStudent}
+              showCheckbox={true}
+            />
+          ))
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="pt-2 border-t border-[#F5F5F4] flex items-center justify-between text-[12px] text-[#78716C]">
+      {/* Chân */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-sm text-ink-2">
         <span>
-          Đang hiển thị {filteredStudents.length} / {students.length} học sinh
+          Đang hiển thị <span className="font-mono">{filteredStudents.length}</span> / {students.length} học sinh
         </span>
         {someFilteredSelected && !allFilteredSelected && (
-          <span className="text-[#B4232C] font-medium">
-            (Một phần đã được chọn)
-          </span>
+          <span className="font-medium text-primary-ink">Một phần đã được chọn</span>
         )}
       </div>
     </div>

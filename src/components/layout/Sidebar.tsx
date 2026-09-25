@@ -1,230 +1,21 @@
-import React from "react";
-import {
-  Home,
-  Users,
-  School,
-  ClipboardList,
-  CheckSquare,
-  FileSpreadsheet,
-  BarChart3,
-  Bell,
-  Settings,
-  History,
-  Award,
-  ChevronRight,
-  X,
-  GraduationCap,
-} from "lucide-react";
-import { SidebarProps, NavigationItem, UserRole } from "../../types";
-import { KitoVuaLogo } from "../ui";
+import React, { useMemo } from "react";
+import { ChevronsLeft, ChevronsRight, LogOut } from "lucide-react";
+import { SidebarProps } from "../../types";
+import { Avatar, KitoVuaLogo } from "../ui";
+import { ROLE_NAVIGATION, NavEntry, isNavActive } from "./navigation";
+import { ROLE_LABELS } from "../../lib/format";
+import { cn } from "../../lib/cn";
 
 // ============================================================================
-// NAVIGATION CONFIGURATION BY ROLE (§3, §4, §5)
+// SIDEBAR v2 (03 §6.3) — panel nổi, chỉ hiện từ lg; thu gọn còn icon.
 // ============================================================================
-export const ROLE_NAVIGATION: Record<UserRole, NavigationItem[]> = {
-  ADMIN: [
-    {
-      id: "admin-dashboard",
-      label: "Dashboard",
-      path: "/admin/dashboard",
-      icon: <Home className="w-5 h-5" />,
-      section: "TỔNG QUAN",
-    },
-    // Section: QUẢN LÝ
-    {
-      id: "admin-users",
-      label: "Người dùng",
-      path: "/admin/users",
-      icon: <Users className="w-5 h-5" />,
-      section: "QUẢN LÝ",
-    },
-    {
-      id: "admin-classes",
-      label: "Lớp học",
-      path: "/admin/classes",
-      icon: <School className="w-5 h-5" />,
-      section: "QUẢN LÝ",
-    },
-    {
-      id: "admin-students",
-      label: "Học sinh",
-      path: "/admin/students",
-      icon: <GraduationCap className="w-5 h-5" />,
-      section: "QUẢN LÝ",
-    },
-    // Section: HỌC TẬP
-    {
-      id: "admin-attendance",
-      label: "Điểm danh",
-      path: "/admin/attendance",
-      icon: <CheckSquare className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "admin-scores",
-      label: "Bảng điểm",
-      path: "/admin/scores",
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "admin-reports",
-      label: "Báo cáo",
-      path: "/admin/reports",
-      icon: <BarChart3 className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    // Section: TRUYỀN THÔNG
-    {
-      id: "admin-notifications",
-      label: "Thông báo",
-      path: "/admin/notifications",
-      icon: <Bell className="w-5 h-5" />,
-      badge: "3",
-      section: "TRUYỀN THÔNG",
-    },
-    // Section: HỆ THỐNG
-    {
-      id: "admin-settings",
-      label: "Cài đặt hệ thống",
-      path: "/admin/settings",
-      icon: <Settings className="w-5 h-5" />,
-      section: "HỆ THỐNG",
-    },
-    {
-      id: "admin-activity-log",
-      label: "Activity Log",
-      path: "/admin/activity-log",
-      icon: <History className="w-5 h-5" />,
-      section: "HỆ THỐNG",
-    },
-  ],
 
-  GLV: [
-    {
-      id: "teacher-dashboard",
-      label: "Trang chủ",
-      path: "/teacher/dashboard",
-      icon: <Home className="w-5 h-5" />,
-      section: "TỔNG QUAN",
-    },
-    {
-      id: "teacher-classes",
-      label: "Lớp của tôi",
-      path: "/teacher/classes",
-      icon: <School className="w-5 h-5" />,
-      section: "LỚP HỌC",
-    },
-    {
-      id: "teacher-attendance",
-      label: "Điểm danh hôm nay",
-      path: "/teacher/attendance",
-      icon: <CheckSquare className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "teacher-scores",
-      label: "Nhập điểm",
-      path: "/teacher/scores",
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "teacher-students",
-      label: "Danh sách học sinh",
-      path: "/teacher/students",
-      icon: <ClipboardList className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "teacher-notifications",
-      label: "Thông báo",
-      path: "/teacher/notifications",
-      icon: <Bell className="w-5 h-5" />,
-      badge: "2",
-      section: "TRUYỀN THÔNG",
-    },
-  ],
+interface SidebarExtraProps {
+  notificationCount?: number;
+  onLogout?: () => void;
+}
 
-  PARENT: [
-    {
-      id: "parent-dashboard",
-      label: "Trang chủ",
-      path: "/dashboard",
-      icon: <Home className="w-5 h-5" />,
-      section: "TỔNG QUAN",
-    },
-    {
-      id: "parent-scores",
-      label: "Bảng điểm con",
-      path: "/parent/scores",
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-      section: "KẾT QUẢ HỌC TẬP",
-    },
-    {
-      id: "parent-attendance",
-      label: "Lịch sử điểm danh",
-      path: "/parent/attendance",
-      icon: <CheckSquare className="w-5 h-5" />,
-      section: "KẾT QUẢ HỌC TẬP",
-    },
-    {
-      id: "parent-notifications",
-      label: "Thông báo giáo xứ",
-      path: "/parent/notifications",
-      icon: <Bell className="w-5 h-5" />,
-      badge: "1",
-      section: "TIN TỨC",
-    },
-    {
-      id: "parent-achievements",
-      label: "Huy hiệu & Thành tích",
-      path: "/parent/achievements",
-      icon: <Award className="w-5 h-5" />,
-      section: "THÀNH TÍCH",
-    },
-  ],
-
-  STUDENT: [
-    {
-      id: "student-dashboard",
-      label: "Trang chủ",
-      path: "/dashboard",
-      icon: <Home className="w-5 h-5" />,
-      section: "TỔNG QUAN",
-    },
-    {
-      id: "student-scores",
-      label: "Bảng điểm của tôi",
-      path: "/student/scores",
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "student-attendance",
-      label: "Chuyên cần",
-      path: "/student/attendance",
-      icon: <CheckSquare className="w-5 h-5" />,
-      section: "HỌC TẬP",
-    },
-    {
-      id: "student-achievements",
-      label: "Gia tài thành tích",
-      path: "/student/achievements",
-      icon: <Award className="w-5 h-5" />,
-      section: "THÀNH TÍCH",
-    },
-    {
-      id: "student-notifications",
-      label: "Thông báo",
-      path: "/student/notifications",
-      icon: <Bell className="w-5 h-5" />,
-      section: "TIN TỨC",
-    },
-  ],
-};
-
-export const Sidebar: React.FC<SidebarProps> = ({
+export const Sidebar: React.FC<SidebarProps & SidebarExtraProps> = ({
   role,
   currentPath,
   onNavigate,
@@ -232,250 +23,145 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   user,
   className = "",
-  isOpenOnMobile = false,
-  onCloseMobile,
+  notificationCount = 0,
+  onLogout,
 }) => {
   const items = ROLE_NAVIGATION[role] || [];
 
-  // Group items by section
-  const sections = React.useMemo(() => {
-    const map = new Map<string, NavigationItem[]>();
+  const sections = useMemo(() => {
+    const map = new Map<string, NavEntry[]>();
     for (const item of items) {
-      const sec = item.section || "CHUNG";
-      if (!map.has(sec)) {
-        map.set(sec, []);
-      }
-      map.get(sec)!.push(item);
+      const key = item.section || "Chung";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
     }
     return Array.from(map.entries());
   }, [items]);
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full bg-white border-r border-[#E7E5E4] select-none">
-      {/* Brand Header */}
-      <div className="relative h-16 px-4 flex items-center border-b border-[#E7E5E4] bg-white transition-colors duration-300">
-        <div
-          className="flex items-center overflow-hidden cursor-pointer flex-1 min-w-0"
-          onClick={collapsed ? onToggleCollapse : undefined}
-          title={collapsed ? "Nhấn để mở rộng thanh điều hướng" : undefined}
-        >
-          <KitoVuaLogo
-            size={40}
-            showText={!collapsed}
-            subtitle="Gx. Đức Mẹ Hằng Cứu Giúp"
-          />
-        </div>
-
-        {/* Mobile close button */}
-        {isOpenOnMobile && onCloseMobile && (
-          <button
-            type="button"
-            onClick={onCloseMobile}
-            aria-label="Đóng thanh điều hướng"
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-[8px] text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4] cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
-
-        {/* Desktop collapse toggle */}
-        {!isOpenOnMobile && onToggleCollapse && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
-            className={`
-              hidden md:flex items-center justify-center cursor-pointer transition-all duration-300 ease-in-out
-              ${
-                collapsed
-                  ? "absolute -right-3.5 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full bg-white border border-[#D6D3D1] shadow-xs text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4] hover:border-[#A8A29E] hover:scale-110 active:scale-95"
-                  : "w-8 h-8 rounded-[8px] text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4]"
-              }
-            `}
-          >
-            <ChevronRight
-              className={`w-4 h-4 transition-transform duration-300 ease-in-out ${
-                collapsed ? "rotate-0" : "rotate-180"
-              }`}
-            />
-          </button>
-        )}
-      </div>
-
-      {/* Navigation Items grouped by section */}
-      <nav
-        aria-label="Thanh điều hướng chính"
-        className="flex-1 overflow-y-auto py-4 px-3 space-y-6 no-scrollbar"
-      >
-        {sections.map(([sectionName, sectionItems]) => (
-          <div key={sectionName} className="space-y-1">
-            <div
-              className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                collapsed ? "max-h-0 opacity-0 pb-0" : "max-h-8 opacity-100 px-3 pb-1"
-              }`}
+  return (
+    <aside
+      className={cn(
+        "hidden shrink-0 transition-[width] duration-300 ease-out-soft lg:block",
+        collapsed ? "w-24" : "w-72",
+        className
+      )}
+    >
+      <div className="sticky top-0 h-dvh p-3">
+        <div className="flex h-full flex-col overflow-hidden rounded-card-lg border border-line bg-surface shadow-card">
+          {/* Brand */}
+          <div className={cn("flex h-18 shrink-0 items-center gap-2 px-4", collapsed && "justify-center px-0")}>
+            <button
+              type="button"
+              onClick={() => onNavigate(items[0]?.path ?? "/dashboard")}
+              className="min-w-0 flex-1 rounded-control text-left"
+              aria-label="Về trang chủ"
             >
-              <div className="text-[11px] font-bold uppercase tracking-wider text-[#A8A29E] whitespace-nowrap">
-                {sectionName}
-              </div>
-            </div>
+              <KitoVuaLogo size={40} showText={!collapsed} subtitle="Gx. Đức Mẹ Hằng Cứu Giúp" />
+            </button>
+          </div>
 
-            <div className="space-y-1">
-              {sectionItems.map((item) => {
-                const isActive =
-                  currentPath === item.path ||
-                  (item.path !== "/" &&
-                    currentPath.startsWith(item.path) &&
-                    item.path !== "/admin" &&
-                    item.path !== "/teacher");
-                const isDisabled = item.disabled;
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    disabled={isDisabled}
-                    onClick={() => {
-                      if (!isDisabled) {
-                        onNavigate(item.path);
-                        if (isOpenOnMobile && onCloseMobile) {
-                          onCloseMobile();
-                        }
-                      }
-                    }}
-                    title={collapsed ? item.label : undefined}
-                    aria-current={isActive ? "page" : undefined}
-                    className={`
-                      w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[14px] font-medium transition-colors duration-200 relative group cursor-pointer
-                      focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B4232C]/30
-                      ${
-                        isDisabled
-                          ? "opacity-40 cursor-not-allowed text-[#A8A29E] bg-transparent"
-                          : isActive
-                          ? "bg-[#FFF1F2] text-[#B4232C] font-semibold shadow-xs"
-                          : "text-[#57534E] hover:bg-[#F5F5F4] hover:text-[#1C1917] active:bg-[#E7E5E4]"
-                      }
-                    `}
-                  >
-                    {/* Active Indicator Bar (Emphasis not relying on color alone) */}
-                    {isActive && (
-                      <span
+          {/* Navigation */}
+          <nav aria-label="Điều hướng chính" className="no-scrollbar flex-1 space-y-5 overflow-y-auto px-3 py-2">
+            {sections.map(([section, sectionItems]) => (
+              <div key={section} className="space-y-1">
+                <p
+                  className={cn(
+                    "px-3 pb-1 text-xs font-medium text-ink-3 transition-opacity duration-200",
+                    collapsed && "sr-only"
+                  )}
+                >
+                  {section}
+                </p>
+                {sectionItems.map((item) => {
+                  const active = isNavActive(item, currentPath);
+                  const Icon = item.icon;
+                  const badge = item.showNotificationCount && notificationCount > 0 ? notificationCount : null;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onNavigate(item.path)}
+                      aria-current={active ? "page" : undefined}
+                      title={collapsed ? item.label : undefined}
+                      className={cn(
+                        "group relative flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-[0.9375rem] font-medium transition-colors duration-200",
+                        collapsed && "justify-center px-0",
+                        active ? "bg-night text-on-night shadow-xs" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "size-5 shrink-0 transition-transform duration-200",
+                          !active && "group-hover:scale-110"
+                        )}
                         aria-hidden="true"
-                        className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-[#B4232C] rounded-r-full shadow-xs"
                       />
-                    )}
-
-                    {/* Icon with stable anchor wrapper - NO horizontal jumping */}
-                    <div
-                      className={`w-6 h-6 flex items-center justify-center flex-shrink-0 transition-transform ${
-                        isActive
-                          ? "text-[#B4232C] scale-105"
-                          : "text-[#78716C] group-hover:text-[#1C1917]"
-                      }`}
-                    >
-                      {item.icon}
-                    </div>
-
-                    {/* Label & Badge: smooth max-width and opacity transition */}
-                    <div
-                      className={`flex-1 flex items-center justify-between min-w-0 overflow-hidden transition-all duration-300 ease-in-out ${
-                        collapsed ? "max-w-0 opacity-0 pointer-events-none" : "max-w-[200px] opacity-100"
-                      }`}
-                    >
-                      <span className="truncate text-left whitespace-nowrap">{item.label}</span>
-                      {item.badge && (
+                      {!collapsed && <span className="flex-1 truncate text-left">{item.label}</span>}
+                      {badge !== null && (
                         <span
-                          className={`ml-2 px-2 py-0.5 text-[11px] font-bold rounded-full whitespace-nowrap ${
-                            isActive
-                              ? "bg-[#B4232C] text-white"
-                              : "bg-[#F5F5F4] text-[#78716C] group-hover:bg-[#E7E5E4]"
-                          }`}
+                          className={cn(
+                            "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold",
+                            active ? "bg-primary text-on-primary" : "bg-primary-soft text-primary-ink",
+                            collapsed && "absolute top-1 right-3"
+                          )}
                         >
-                          {item.badge}
+                          {badge}
                         </span>
                       )}
-                    </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          {/* Footer: người dùng + thu gọn */}
+          <div className="shrink-0 space-y-2 border-t border-line p-3">
+            {user && (
+              <div className={cn("flex items-center gap-3 rounded-control bg-surface-2 p-2", collapsed && "justify-center bg-transparent p-0")}>
+                <Avatar name={user.name} src={user.avatarUrl || undefined} size="sm" />
+                {!collapsed && (
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
+                    <p className="truncate text-xs text-ink-3">{ROLE_LABELS[role]}</p>
+                  </div>
+                )}
+                {!collapsed && onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    aria-label="Đăng xuất"
+                    title="Đăng xuất"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-danger-soft hover:text-danger"
+                  >
+                    <LogOut className="size-4" aria-hidden="true" />
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Footer / User Role Info */}
-      {user && (
-        <div className="border-t border-[#E7E5E4] bg-[#FAFAF9] p-3 transition-colors duration-300">
-          <div className="flex items-center gap-2.5 p-2 rounded-[8px] bg-white border border-[#E7E5E4] overflow-hidden">
-            <div
-              title={`${user.christianName ? `${user.christianName} ` : ""}${user.name} (${
-                role === "ADMIN"
-                  ? "Quản trị viên"
-                  : role === "GLV"
-                  ? "Giáo lý viên"
-                  : role === "PARENT"
-                  ? "Phụ huynh"
-                  : "Học sinh"
-              })`}
-              className="w-8 h-8 rounded-full bg-[#FFF1F2] text-[#B4232C] border border-[#FECDD3] flex items-center justify-center font-bold text-[12px] flex-shrink-0"
-            >
-              {role.substring(0, 2)}
-            </div>
-
-            <div
-              className={`min-w-0 flex-1 overflow-hidden transition-all duration-300 ease-in-out ${
-                collapsed ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"
-              }`}
-            >
-              <div className="text-[13px] font-semibold text-[#1C1917] truncate leading-tight whitespace-nowrap">
-                {user.christianName ? `${user.christianName} ` : ""}
-                {user.name}
+                )}
               </div>
-              <div className="text-[11px] text-[#78716C] truncate mt-0.5 whitespace-nowrap">
-                {role === "ADMIN"
-                  ? "Quản trị viên"
-                  : role === "GLV"
-                  ? "Giáo lý viên"
-                  : role === "PARENT"
-                  ? "Phụ huynh"
-                  : "Học sinh"}
-              </div>
-            </div>
+            )}
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                aria-label={collapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
+                className={cn(
+                  "flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-sm font-medium text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink",
+                  collapsed && "justify-center px-0"
+                )}
+              >
+                {collapsed ? (
+                  <ChevronsRight className="size-4" aria-hidden="true" />
+                ) : (
+                  <>
+                    <ChevronsLeft className="size-4" aria-hidden="true" />
+                    Thu gọn
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
-      )}
-    </div>
-  );
-
-  return (
-    <>
-      {/* Desktop Persistent Sidebar */}
-      <aside
-        className={`hidden md:block flex-shrink-0 transition-[width] duration-300 ease-in-out ${
-          collapsed ? "w-20" : "w-64"
-        } ${className}`}
-      >
-        <div className="sticky top-0 h-screen">{sidebarContent}</div>
-      </aside>
-
-      {/* Mobile Drawer (When opened on mobile) */}
-      {isOpenOnMobile && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Thanh điều hướng di động"
-          className="fixed inset-0 z-50 md:hidden flex"
-        >
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-            onClick={onCloseMobile}
-          />
-          {/* Drawer content */}
-          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl animate-in slide-in-from-left duration-200 z-10">
-            {sidebarContent}
-          </div>
-        </div>
-      )}
-    </>
+      </div>
+    </aside>
   );
 };

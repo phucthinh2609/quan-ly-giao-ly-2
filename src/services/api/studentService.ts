@@ -102,12 +102,12 @@ export const studentService = {
     // Verify Data Ownership (§14)
     if (currentUser) {
       if (currentUser.role === "STUDENT" && student.id !== "stu-001" && student.id !== "s-01") {
-        throw new Error("Học sinh chỉ được xem hồ sơ của chính mình (§14 Data Ownership).");
+        throw new Error("Em chỉ xem được hồ sơ của chính mình.");
       }
       if (currentUser.role === "PARENT") {
         const allowedIds = currentUser.childrenIds || ["stu-001", "stu-002", "s-01", "s-02"];
         if (!allowedIds.includes(student.id) && !allowedIds.includes(student.code)) {
-          throw new Error("Phụ huynh chỉ được xem hồ sơ của con mình (§14 Data Ownership).");
+          throw new Error("Phụ huynh chỉ xem được hồ sơ của con mình.");
         }
       }
     }

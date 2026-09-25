@@ -1,31 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { IconButton } from "./IconButton";
+import { cn } from "../../lib/cn";
 
 export interface SearchBarProps {
-  /**
-   * Giá trị tìm kiếm hiện tại (controlled)
-   */
+  /** Giá trị tìm kiếm hiện tại (controlled) */
   value: string;
-  /**
-   * Placeholder hiển thị
-   */
+  /** Placeholder hiển thị */
   placeholder?: string;
-  /**
-   * Thời gian debounce (ms), mặc định 300ms theo đặc tả §15
-   */
+  /** Thời gian debounce (ms), mặc định 300ms */
   debounceMs?: number;
-  /**
-   * Callback khi giá trị sau debounce thay đổi
-   */
+  /** Gọi khi giá trị sau debounce thay đổi */
   onChange: (value: string) => void;
-  /**
-   * Callback khi người dùng nhấn nút Xóa tìm kiếm
-   */
+  /** Gọi khi người dùng nhấn nút Xóa tìm kiếm */
   onClear?: () => void;
-  /**
-   * Kích thước thanh tìm kiếm (sm: 36px, md: 44px, lg: 52px, parent: 56px)
-   */
+  /** Kích thước: sm 44 · md theo --control · lg 52 · parent 56 */
   size?: "sm" | "md" | "lg" | "parent";
   disabled?: boolean;
   autoFocus?: boolean;
@@ -34,9 +23,16 @@ export interface SearchBarProps {
   ariaLabel?: string;
 }
 
+const sizeStyles: Record<NonNullable<SearchBarProps["size"]>, { box: string; input: string; icon: string }> = {
+  sm: { box: "h-11 pl-3.5 pr-1", input: "text-base", icon: "size-4" },
+  md: { box: "h-(--control) min-h-11 pl-4 pr-1", input: "text-base", icon: "size-5" },
+  lg: { box: "h-13 pl-4.5 pr-1.5", input: "text-base", icon: "size-5" },
+  parent: { box: "h-14 pl-5 pr-1.5", input: "text-lg", icon: "size-6" },
+};
+
 /**
- * SearchBar Component (§15 - 03_Component_Library)
- * Hỗ trợ debounce mặc định 300ms, nút onClear dọn sạch từ khóa, và touch-target chuẩn ≥ 44px.
+ * SearchBar (03 §5): pill bg-surface-2, icon trái, nút xóa, debounce 300ms.
+ * Esc xóa nhanh nội dung đang gõ.
  */
 export const SearchBar: React.FC<SearchBarProps> = ({
   value,
@@ -60,7 +56,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setInnerValue(value);
   }, [value]);
 
-  // Debounce xử lý gọi onChange
+  // Debounce gọi onChange
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false;
@@ -96,32 +92,22 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
-  // Kích thước chuẩn Design Tokens
-  const sizeStyles = {
-    sm: "h-[36px] text-[14px] pl-9 pr-9",
-    md: "h-[44px] text-[15px] pl-10 pr-10",
-    lg: "h-[52px] text-[16px] pl-11 pr-11",
-    parent: "h-[56px] text-[18px] pl-12 pr-12 font-medium",
-  };
-
-  const iconSizes = {
-    sm: "w-4 h-4 left-2.5",
-    md: "w-4.5 h-4.5 left-3",
-    lg: "w-5 h-5 left-3.5",
-    parent: "w-6 h-6 left-4",
-  };
+  const styles = sizeStyles[size];
+  const showClear = Boolean(innerValue) && !disabled;
 
   return (
-    <div className={`relative flex items-center w-full ${className}`}>
-      {/* Icon Kính lúp Tìm kiếm */}
-      <span
-        className={`absolute pointer-events-none text-[#78716C] flex items-center justify-center ${iconSizes[size]}`}
-        aria-hidden="true"
-      >
-        <Search className="w-full h-full" />
-      </span>
+    <div
+      className={cn(
+        "relative flex w-full items-center gap-2.5 rounded-full border border-transparent bg-surface-2 text-ink",
+        "transition-[background-color,border-color,box-shadow] duration-150 ease-out-soft",
+        "hover:border-line-strong focus-within:border-primary focus-within:bg-surface focus-within:ring-4 focus-within:ring-primary/15",
+        disabled && "cursor-not-allowed opacity-60 hover:border-transparent",
+        styles.box,
+        className
+      )}
+    >
+      <Search className={cn("shrink-0 text-ink-3", styles.icon)} aria-hidden="true" />
 
-      {/* Input Field */}
       <input
         ref={inputRef}
         id={id}
@@ -134,29 +120,27 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         value={innerValue}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
-        className={`
-          w-full rounded-[10px] bg-white text-[#292524] placeholder-[#A8A29E]
-          border border-[#E7E5E4] hover:border-[#D6D3D1]
-          focus:border-[#B4232C] focus:ring-3 focus:ring-[#B4232C]/20 outline-none
-          transition-colors duration-150 font-sans
-          disabled:bg-[#F5F5F4] disabled:text-[#A8A29E] disabled:cursor-not-allowed
-          ${sizeStyles[size]}
-        `}
+        enterKeyHint="search"
+        className={cn(
+          "h-full w-full min-w-0 appearance-none border-none bg-transparent p-0 outline-none",
+          "text-ink placeholder:text-ink-3 disabled:cursor-not-allowed",
+          "[&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none",
+          !showClear && "pr-3",
+          styles.input
+        )}
       />
 
-      {/* Nút Xóa từ khóa (onClear) */}
-      {Boolean(innerValue) && !disabled && (
-        <div className="absolute right-1.5 flex items-center">
-          <IconButton
-            aria-label="Xóa nội dung tìm kiếm"
-            variant="ghost"
-            size={size === "parent" ? "md" : "sm"}
-            onClick={handleClear}
-            className="text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F5F4]"
-          >
-            <X className="w-4 h-4" />
-          </IconButton>
-        </div>
+      {/* Nút xóa: pseudo-element mở rộng vùng chạm tới >= 44px */}
+      {showClear && (
+        <IconButton
+          aria-label="Xóa nội dung tìm kiếm"
+          variant="ghost"
+          size={size === "parent" || size === "lg" ? "md" : "sm"}
+          onClick={handleClear}
+          className="shrink-0 before:absolute before:-inset-1 before:content-[''] hover:bg-surface-3"
+        >
+          <X />
+        </IconButton>
       )}
     </div>
   );

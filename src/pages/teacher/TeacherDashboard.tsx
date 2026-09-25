@@ -1,20 +1,27 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
-  CalendarCheck,
-  FileEdit,
-  CheckCircle2,
   ArrowRight,
   Bell,
-  Calendar,
-  ChevronRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  PenLine,
+  Users,
 } from "lucide-react";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { IconTile } from "../../components/ui/IconTile";
 import { ClassCard } from "../../components/class/ClassCard";
 import { AttendanceSummary } from "../../components/attendance/AttendanceSummary";
 import { ActivityFeed } from "../../components/dashboard/ActivityFeed";
+import { SectionHeader } from "../../components/dashboard/SectionHeader";
 import { NotificationCard } from "../../components/notification/NotificationCard";
+import { useAuth } from "../../context/AuthContext";
+import { cn } from "../../lib/cn";
+import { formatWeekdayDate, givenName, greeting } from "../../lib/format";
+import { useReveal } from "../../lib/motion";
 import { NotificationData, AttendanceSummaryData } from "../../types";
 import {
   MOCK_CLASSES,
@@ -26,30 +33,39 @@ export interface TeacherDashboardProps {
   className?: string;
 }
 
+const SESSION_TIME = "08:00";
+
+/** Chúa Nhật gần nhất sắp tới (hôm nay nếu hôm nay là Chúa Nhật). */
+function nextSunday(from: Date): Date {
+  const d = new Date(from);
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+  return d;
+}
+
+/** Chúa Nhật đã qua gần nhất (trước hôm nay). */
+function previousSunday(from: Date): Date {
+  const d = new Date(from);
+  d.setDate(d.getDate() - (d.getDay() === 0 ? 7 : d.getDay()));
+  return d;
+}
+
 /**
- * TeacherDashboard Component (§30 03_Component_Library & Wireframe B §6)
- *
- * CÂY THÀNH PHẦN BẮT BUỘC:
- * <TeacherDashboard>
- * ├── <PageHeader />
- * ├── <QuickActionGrid /> (2 nút Điểm danh/Nhập điểm, đạt chuẩn ≤1 tap)
- * ├── <MyClassList />
- * ├── <AttendanceSummary />
- * ├── <UpcomingNotification />
- * └── <ActivityFeed />
- *
- * TUÂN THỦ RULE-015:
- * Tuyệt đối KHÔNG chứa thành phần Gamification (AchievementBadge, XPProgress, game-*).
+ * TeacherDashboard (04 §7, B-GLV-01) — hero "Buổi học tới" với CTA 1 chạm Điểm danh / Nhập điểm.
  */
-export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
-  onNavigate,
-  className = "",
-}) => {
-  // GLV phụ trách lớp 7A (Khối Thêm Sức 1)
+export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigate, className }) => {
+  const { user } = useAuth();
+  const revealRef = useReveal<HTMLDivElement>();
+
+  const today = useMemo(() => new Date(), []);
+  const upcoming = useMemo(() => nextSunday(today), [today]);
+  const lastSession = useMemo(() => previousSunday(today), [today]);
+  const isToday = upcoming.toDateString() === today.toDateString();
+
+  // GLV phụ trách lớp 7A và 8A
   const myClasses = MOCK_CLASSES.filter((c) => c.id === "cls-7a" || c.id === "cls-8a");
   const primaryClass = myClasses[0] || MOCK_CLASSES[0];
 
-  // Today's attendance summary data for primary class
+  // Chuyên cần buổi trước của lớp chính
   const classSummary: AttendanceSummaryData = {
     total: primaryClass.studentCount,
     present: primaryClass.presentCount,
@@ -58,14 +74,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     late: 0,
     presentRate: (primaryClass.presentCount / primaryClass.studentCount) * 100,
   };
+  const lastRate = Math.round(classSummary.presentRate);
 
-  // GLV Urgent/Upcoming reminder notice
+  // Nhắc việc khẩn từ Ban Giáo lý
   const upcomingNotice: NotificationData = {
     id: "glv-notice-01",
     type: "URGENT",
-    title: "Nhắc nhở: Hạn chót hoàn thành nhập điểm Giữa kỳ I",
+    title: "Hạn chót hoàn thành nhập điểm Giữa kỳ I",
     preview: "Còn 2 ngày để hoàn tất điểm 15 phút và Giữa kỳ cho học sinh Lớp 7A.",
-    content: "Kính gửi quý Giáo lý viên lớp 7A, theo lịch học vụ chung của Đoàn Kitô Vua, bảng điểm giữa kỳ cần được chốt trước 23:59 ngày 26/09 để Ban Phụ Huynh có thể theo dõi kết quả của các em.",
+    content:
+      "Kính gửi quý Giáo lý viên lớp 7A, theo lịch học vụ chung của Đoàn Kitô Vua, bảng điểm giữa kỳ cần được chốt trước 23:59 ngày 26/09 để phụ huynh có thể theo dõi kết quả của các em.",
     timestamp: "1 giờ trước",
     formattedDate: "24/09/2026 · 09:00",
     isRead: false,
@@ -74,213 +92,184 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     actionPath: "/teacher/scores",
   };
 
-  const handleQuickAction = (path: string) => {
-    if (onNavigate) {
-      onNavigate(path);
-    }
-  };
+  const go = (path: string) => onNavigate?.(path);
+
+  const title = user?.name ? `${greeting()}, ${givenName(user.name)}` : greeting();
+  const sessionDay = isToday ? `Hôm nay, ${formatWeekdayDate(upcoming).split(", ")[1]}` : formatWeekdayDate(upcoming);
 
   return (
-    <div className={`space-y-6 sm:space-y-7 pb-10 ${className}`}>
-      {/* =================================================================== */}
-      {/* 1. PageHeader (§14, §30) */}
-      {/* =================================================================== */}
-      <PageHeader
-        title="Không gian Giáo lý viên"
-        description="Chào mừng GLV. Maria Nguyễn Thị Hoa · Phụ trách Lớp 7A (Khối Thêm Sức 1)"
-        badge={<Badge variant="primary">Lớp 7A · 32 học sinh</Badge>}
-        actions={
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-[#78716C] font-mono bg-[#FAFAF9] px-2.5 py-1 rounded-lg border border-[#E7E5E4] hidden sm:inline">
-              Chúa Nhật XXV TN · 24/09/2026
-            </span>
+    <div ref={revealRef} className={cn("space-y-6", className)}>
+      <div data-reveal>
+        <PageHeader title={title} description={formatWeekdayDate(today)} />
+      </div>
+
+      {/* Hero "Buổi học tới" — khối night, CTA lớn trong vùng ngón cái */}
+      <section
+        data-reveal
+        aria-labelledby="next-session-heading"
+        className="grain relative overflow-hidden rounded-card-lg bg-night p-5 text-on-night shadow-float sm:p-7"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-primary/30 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-28 -left-20 size-64 rounded-full bg-gold/10 blur-3xl"
+        />
+
+        <div className="relative grid gap-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-medium text-on-night/70">
+              <CalendarDays className="size-4" aria-hidden="true" />
+              Buổi học tới
+            </p>
+            <h2 id="next-session-heading" className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+              {primaryClass.name}
+              <span className="font-semibold text-on-night/60"> · {primaryClass.grade}</span>
+            </h2>
+
+            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-on-night/80">
+              <li className="flex items-center gap-1.5">
+                <Clock className="size-4 shrink-0" aria-hidden="true" />
+                <span>
+                  {sessionDay} · <span className="font-mono">{SESSION_TIME}</span>
+                </span>
+              </li>
+              {primaryClass.room && (
+                <li className="flex min-w-0 items-center gap-1.5">
+                  <MapPin className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{primaryClass.room}</span>
+                </li>
+              )}
+              <li className="flex items-center gap-1.5">
+                <Users className="size-4 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="font-mono">{primaryClass.studentCount}</span> em
+                </span>
+              </li>
+            </ul>
+
+            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-on-night/10 px-3 py-1.5 text-sm">
+              <CheckCircle2 className="size-4 text-on-night/70" aria-hidden="true" />
+              <span>
+                Đã điểm danh{" "}
+                <span className="font-mono font-semibold">0/{primaryClass.studentCount}</span>
+              </span>
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Button
+                size="lg"
+                rightIcon={<ArrowRight />}
+                onClick={() => go("/teacher/attendance")}
+                className="w-full sm:w-auto"
+              >
+                Bắt đầu điểm danh
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                leftIcon={<PenLine />}
+                onClick={() => go("/teacher/scores")}
+                className="w-full border-on-night/30 bg-transparent text-on-night hover:border-on-night/60 hover:bg-on-night/10 sm:w-auto"
+              >
+                Nhập điểm
+              </Button>
+            </div>
           </div>
-        }
-      />
 
-      {/* =================================================================== */}
-      {/* 2. QuickActionGrid (§30, Ràng buộc: ≤1 tap tới đúng trang) */}
-      {/* Hai nút hành động tối ưu tốc độ tác vụ: Điểm danh & Nhập điểm */}
-      {/* =================================================================== */}
-      <section aria-labelledby="quick-action-heading" className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h3
-            id="quick-action-heading"
-            className="text-[13px] font-semibold tracking-wider uppercase text-[#78716C]"
-          >
-            Tác vụ thao tác nhanh (1 Chạm)
-          </h3>
-          <span className="text-[12px] text-[#168154] font-medium flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Sẵn sàng ghi nhận
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-          {/* Nút 1: Điểm danh hôm nay (≤1 tap tới /teacher/attendance) */}
-          <button
-            type="button"
-            onClick={() => handleQuickAction("/teacher/attendance")}
-            className="group relative overflow-hidden bg-gradient-to-br from-[#FFF1F2] to-white rounded-2xl border-2 border-[#FECDD3] hover:border-[#B4232C] p-5 sm:p-6 text-left shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.99] flex items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="w-13 h-13 rounded-2xl bg-[#B4232C] text-white flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                <CalendarCheck className="w-7 h-7" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-[17px] sm:text-[18px] font-bold text-[#1C1917] group-hover:text-[#B4232C] transition-colors font-serif">
-                    Điểm danh hôm nay
-                  </h4>
-                  <Badge variant="primary" size="sm">Cần ghi</Badge>
-                </div>
-                <p className="text-[13px] text-[#57534E] mt-0.5 line-clamp-1">
-                  Ghi nhận chuyên cần Chúa Nhật 24/09 (32 học sinh)
-                </p>
-                <div className="mt-2 flex items-center gap-2 text-[12px] text-[#B4232C] font-semibold">
-                  <span>Vào điểm danh ngay</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            </div>
-            <div className="hidden sm:flex w-10 h-10 rounded-full bg-white border border-[#FECDD3] items-center justify-center text-[#B4232C] shadow-2xs group-hover:bg-[#B4232C] group-hover:text-white transition-colors">
-              <ChevronRight className="w-5 h-5" />
-            </div>
-          </button>
-
-          {/* Nút 2: Nhập điểm số (≤1 tap tới /teacher/scores) */}
-          <button
-            type="button"
-            onClick={() => handleQuickAction("/teacher/scores")}
-            className="group relative overflow-hidden bg-gradient-to-br from-[#EFF6FF] to-white rounded-2xl border-2 border-[#BFDBFE] hover:border-[#2563EB] p-5 sm:p-6 text-left shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.99] flex items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="w-13 h-13 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                <FileEdit className="w-7 h-7" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-[17px] sm:text-[18px] font-bold text-[#1C1917] group-hover:text-[#2563EB] transition-colors font-serif">
-                    Nhập điểm số
-                  </h4>
-                  <Badge variant="neutral" size="sm">Giữa kỳ I</Badge>
-                </div>
-                <p className="text-[13px] text-[#57534E] mt-0.5 line-clamp-1">
-                  Nhập điểm miệng, 15 phút hoặc tải file Excel lên
-                </p>
-                <div className="mt-2 flex items-center gap-2 text-[12px] text-[#2563EB] font-semibold">
-                  <span>Mở bảng điểm nhập liệu</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            </div>
-            <div className="hidden sm:flex w-10 h-10 rounded-full bg-white border border-[#BFDBFE] items-center justify-center text-[#2563EB] shadow-2xs group-hover:bg-[#2563EB] group-hover:text-white transition-colors">
-              <ChevronRight className="w-5 h-5" />
-            </div>
-          </button>
-        </div>
-      </section>
-
-      {/* =================================================================== */}
-      {/* 3. MyClassList (§20, §30) */}
-      {/* Danh sách lớp phụ trách */}
-      {/* =================================================================== */}
-      <section aria-labelledby="my-classes-heading" className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3
-              id="my-classes-heading"
-              className="text-[18px] sm:text-[19px] font-bold text-[#1C1917] font-serif"
-            >
-              Lớp giáo lý phụ trách
-            </h3>
-            <p className="text-[13px] text-[#78716C]">
-              Danh sách các phân đoàn bạn được chỉ định làm Giáo lý viên
+          <div className="hidden text-right sm:block">
+            <p className="text-sm text-on-night/70">Buổi trước</p>
+            <p className="font-mono text-4xl font-semibold tracking-tight">{lastRate}%</p>
+            <p className="text-sm text-on-night/70">
+              {classSummary.present}/{classSummary.total} em có mặt
             </p>
           </div>
-          <span className="text-[12px] text-[#78716C] bg-[#FAFAF9] px-2.5 py-1 rounded-lg border border-[#E7E5E4]">
-            {myClasses.length} lớp học
-          </span>
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+      {/* Lớp của tôi — rail cuộn ngang có snap trên mobile/tablet, lưới trên desktop */}
+      <section data-reveal aria-labelledby="my-classes-heading" className="space-y-3">
+        <SectionHeader
+          id="my-classes-heading"
+          title="Lớp của tôi"
+          description={`${myClasses.length} lớp được phân công`}
+          action={
+            <Button
+              variant="ghost"
+              rightIcon={<ArrowRight />}
+              onClick={() => go("/teacher/classes")}
+              className="-mr-3 px-3 text-primary-ink hover:text-primary-ink"
+            >
+              Xem tất cả
+            </Button>
+          }
+        />
+        <ul className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pt-1 pb-3 sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0">
           {myClasses.map((cls) => (
-            <ClassCard
-              key={cls.id}
-              classInfo={cls}
-              onAttendanceClick={() => handleQuickAction("/teacher/attendance")}
-              onScoreClick={() => handleQuickAction("/teacher/scores")}
-              onViewDetails={() => alert(`Xem chi tiết lớp ${cls.name}`)}
-            />
+            <li key={cls.id} className="w-72 max-w-[85vw] shrink-0 snap-start lg:w-auto lg:max-w-none">
+              <ClassCard classInfo={cls} onClick={(id) => go(`/classes/${id}`)} />
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
-      {/* =================================================================== */}
-      {/* 4. AttendanceSummary (§21, §30) */}
-      {/* Thống kê chuyên cần của lớp hôm nay */}
-      {/* =================================================================== */}
-      <section aria-labelledby="attendance-summary-heading" className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h3
-            id="attendance-summary-heading"
-            className="text-[18px] sm:text-[19px] font-bold text-[#1C1917] font-serif"
-          >
-            Chuyên cần Lớp 7A hôm nay
-          </h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickAction("/teacher/attendance")}
-          >
-            Cập nhật chi tiết
-          </Button>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="space-y-6">
+          {/* Chuyên cần buổi trước */}
+          <section data-reveal aria-labelledby="attendance-summary-heading" className="space-y-3">
+            <SectionHeader
+              id="attendance-summary-heading"
+              title="Chuyên cần buổi trước"
+              description={`${primaryClass.name} · ${formatWeekdayDate(lastSession)}`}
+              action={
+                <Button variant="outline" onClick={() => go("/teacher/attendance")}>
+                  Chi tiết
+                </Button>
+              }
+            />
+            <AttendanceSummary summary={classSummary} />
+          </section>
 
-        <AttendanceSummary summary={classSummary} />
-      </section>
-
-      {/* =================================================================== */}
-      {/* 5 & 6. UpcomingNotification & ActivityFeed (§24, §25, §30) */}
-      {/* =================================================================== */}
-      <section aria-label="Thông báo và Hoạt động của lớp" className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-        {/* 5. UpcomingNotification */}
-        <div className="bg-white rounded-[14px] border border-[#E7E5E4] p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between pb-3 border-b border-[#F5F5F4]">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-[#B4232C]">
-                <Bell className="w-4 h-4" />
-              </div>
-              <h3 className="text-[16px] sm:text-[17px] font-bold text-[#1C1917] font-serif">
-                Thông báo & Nhắc việc
-              </h3>
-            </div>
-            <Badge variant="error" size="sm" dot>Khẩn cấp</Badge>
-          </div>
-
-          <div className="space-y-3">
+          {/* Thông báo từ Ban Giáo lý */}
+          <section data-reveal aria-labelledby="glv-notice-heading" className="space-y-3">
+            <SectionHeader
+              id="glv-notice-heading"
+              title="Thông báo từ Ban Giáo lý"
+              icon={<Bell />}
+              iconTone="primary"
+              action={
+                <Button
+                  variant="ghost"
+                  rightIcon={<ArrowRight />}
+                  onClick={() => go("/teacher/notifications")}
+                  className="-mr-3 px-3 text-primary-ink hover:text-primary-ink"
+                >
+                  Tất cả
+                </Button>
+              }
+            />
             <NotificationCard
               notification={upcomingNotice}
-              onClick={() => handleQuickAction("/teacher/scores")}
+              onClick={(n) => go(n.actionPath || "/teacher/notifications")}
             />
-
-            {/* Notice from Admin */}
-            <div className="p-3 rounded-xl bg-[#FAFAF9] border border-[#E7E5E4] text-[12.5px] text-[#57534E] flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-[#78716C]" />
-                <span>Họp Huynh trưởng tháng 10: 19:30 Thứ Sáu 02/10</span>
-              </span>
-              <span className="text-[#A8A29E] font-mono text-[11px]">Văn phòng Xứ</span>
-            </div>
-          </div>
+            <Card padding="sm" className="flex items-center gap-3">
+              <IconTile icon={<CalendarDays />} tone="info" size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-ink">Họp Huynh trưởng tháng 10</p>
+                <p className="text-sm text-ink-3">
+                  Thứ Sáu, 02/10 · <span className="font-mono">19:30</span> · Văn phòng Giáo xứ
+                </p>
+              </div>
+            </Card>
+          </section>
         </div>
 
-        {/* 6. ActivityFeed */}
-        <ActivityFeed
-          activities={MOCK_TEACHER_ACTIVITIES}
-          title="Nhật ký thao tác của lớp 7A"
-          onViewAll={() => alert("Xem toàn bộ lịch sử thao tác lớp")}
-        />
-      </section>
+        <div data-reveal>
+          <ActivityFeed activities={MOCK_TEACHER_ACTIVITIES} title="Hoạt động gần đây" description="Lớp bạn phụ trách" />
+        </div>
+      </div>
     </div>
   );
 };

@@ -25,7 +25,7 @@ export const attendanceService = {
     if (currentUser && currentUser.role === "GLV") {
       const allowed = ["cls-7a", "cls-8a", "class-rl1a"];
       if (!allowed.includes(classId)) {
-        throw new Error("GLV chỉ được truy cập điểm danh theo lớp được phân công (§14).");
+        throw new Error("Giáo lý viên chỉ xem được điểm danh của lớp mình phụ trách.");
       }
     }
 

@@ -1,8 +1,14 @@
-import React, { createContext, useContext, useState, useCallback, useId } from "react";
+import React, { createContext, useContext, useState, useCallback, useId, useRef, useEffect } from "react";
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
-import { IconButton } from "./IconButton";
+import { gsap } from "../../lib/motion";
+import { cn } from "../../lib/cn";
 
 export type ToastVariant = "SUCCESS" | "ERROR" | "WARNING" | "INFO";
+
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 
 export interface ToastItem {
   id: string;
@@ -10,6 +16,7 @@ export interface ToastItem {
   message: React.ReactNode;
   variant: ToastVariant;
   duration?: number;
+  action?: ToastAction;
 }
 
 export interface ToastProps {
@@ -17,89 +24,65 @@ export interface ToastProps {
   onDismiss: (id: string) => void;
 }
 
+const variantConfig: Record<ToastVariant, { Icon: typeof CheckCircle2; iconClass: string }> = {
+  SUCCESS: { Icon: CheckCircle2, iconClass: "text-mint" },
+  ERROR: { Icon: AlertCircle, iconClass: "text-coral" },
+  WARNING: { Icon: AlertTriangle, iconClass: "text-sun" },
+  INFO: { Icon: Info, iconClass: "text-sky" },
+};
+
 /**
- * Toast Component hiển thị thông điệp thông báo đơn lẻ (§18 - 03_Component_Library)
- * Hỗ trợ 4 variants chuẩn: SUCCESS, ERROR, WARNING, INFO
+ * Toast v2 (03 §5): khối night nổi, icon tone, hỗ trợ hành động (VD "Hoàn tác").
  */
 export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
-  const { id, title, message, variant } = toast;
+  const { id, title, message, variant, action } = toast;
+  const { Icon, iconClass } = variantConfig[variant];
+  const ref = useRef<HTMLDivElement>(null);
 
-  const variantConfig = {
-    SUCCESS: {
-      Icon: CheckCircle2,
-      iconColor: "text-[#168154]",
-      bgColor: "bg-white",
-      borderColor: "border-[#D1FAE5]",
-      accentBar: "bg-[#168154]",
-    },
-    ERROR: {
-      Icon: AlertCircle,
-      iconColor: "text-[#C73A3A]",
-      bgColor: "bg-white",
-      borderColor: "border-[#FEE2E2]",
-      accentBar: "bg-[#C73A3A]",
-    },
-    WARNING: {
-      Icon: AlertTriangle,
-      iconColor: "text-[#B86F08]",
-      bgColor: "bg-white",
-      borderColor: "border-[#FEF0C7]",
-      accentBar: "bg-[#B86F08]",
-    },
-    INFO: {
-      Icon: Info,
-      iconColor: "text-[#2563EB]",
-      bgColor: "bg-white",
-      borderColor: "border-[#DBEAFE]",
-      accentBar: "bg-[#2563EB]",
-    },
-  }[variant];
-
-  const IconComponent = variantConfig.Icon;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const mm = gsap.matchMedia();
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(el, { y: 16, opacity: 0, scale: 0.98 }, { y: 0, opacity: 1, scale: 1, duration: 0.32, ease: "back.out(1.4)" });
+    });
+    return () => mm.revert();
+  }, []);
 
   return (
     <div
+      ref={ref}
       role={variant === "ERROR" ? "alert" : "status"}
-      aria-live="polite"
-      className={`
-        relative flex items-start gap-3 p-4 rounded-[12px] shadow-lg border ${variantConfig.borderColor}
-        ${variantConfig.bgColor} min-w-[300px] max-w-[420px] overflow-hidden select-none
-        animate-in slide-in-from-top-2 sm:slide-in-from-bottom-2 fade-in duration-200
-      `}
+      className="flex w-full items-center gap-3 rounded-card bg-night py-3 pr-2 pl-4 text-on-night shadow-float sm:w-[26rem]"
     >
-      {/* Vạch màu chỉ thị trạng thái */}
-      <div
-        className={`absolute left-0 top-0 bottom-0 w-1.5 ${variantConfig.accentBar}`}
-        aria-hidden="true"
-      />
+      <Icon className={cn("size-5 shrink-0", iconClass)} aria-hidden="true" />
 
-      {/* Biểu tượng trạng thái */}
-      <div className={`mt-0.5 shrink-0 ${variantConfig.iconColor}`}>
-        <IconComponent className="w-5 h-5" />
+      <div className="min-w-0 flex-1 py-0.5">
+        {title && <p className="text-sm font-semibold leading-snug">{title}</p>}
+        <div className={cn("text-sm leading-snug", title ? "text-on-night/75" : "font-medium")}>{message}</div>
       </div>
 
-      {/* Nội dung thông điệp */}
-      <div className="flex-1 min-w-0 pr-1">
-        {title && (
-          <h4 className="text-[14px] font-bold text-[#1C1917] tracking-tight leading-snug">
-            {title}
-          </h4>
-        )}
-        <div className="text-[13px] text-[#57534E] leading-relaxed mt-0.5">
-          {message}
-        </div>
-      </div>
+      {action && (
+        <button
+          type="button"
+          onClick={() => {
+            action.onClick();
+            onDismiss(id);
+          }}
+          className="h-9 shrink-0 rounded-full bg-on-night/12 px-3.5 text-sm font-semibold text-on-night transition-colors hover:bg-on-night/20 active:scale-95"
+        >
+          {action.label}
+        </button>
+      )}
 
-      {/* Nút đóng */}
-      <IconButton
+      <button
+        type="button"
         aria-label="Đóng thông báo"
-        variant="ghost"
-        size="sm"
         onClick={() => onDismiss(id)}
-        className="text-[#78716C] hover:text-[#1C1917] -mr-1 -mt-1"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-on-night/70 transition-colors hover:bg-on-night/10 hover:text-on-night"
       >
-        <X className="w-4 h-4" />
-      </IconButton>
+        <X className="size-4" aria-hidden="true" />
+      </button>
     </div>
   );
 };
@@ -111,6 +94,8 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
 export interface ToastOptions {
   title?: string;
   duration?: number;
+  /** Hành động kèm theo, VD { label: "Hoàn tác", onClick: undo } */
+  action?: ToastAction;
 }
 
 export interface ToastContextType {
@@ -125,74 +110,58 @@ export interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
+const MAX_VISIBLE = 3;
+
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const baseId = useId();
+  const timers = useRef(new Map<string, number>());
 
   const dismiss = useCallback((id: string) => {
+    const timer = timers.current.get(id);
+    if (timer) window.clearTimeout(timer);
+    timers.current.delete(id);
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const clearAll = useCallback(() => {
+    timers.current.forEach((timer) => window.clearTimeout(timer));
+    timers.current.clear();
     setToasts([]);
   }, []);
 
   const showToast = useCallback(
     (message: React.ReactNode, variant: ToastVariant = "INFO", options?: ToastOptions) => {
       const id = `${baseId}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const duration = options?.duration ?? 4000;
+      // Toast có hành động (Hoàn tác) hiển thị lâu hơn để người dùng kịp bấm
+      const duration = options?.duration ?? (options?.action ? 6000 : 4000);
 
-      const newToast: ToastItem = {
-        id,
-        title: options?.title,
-        message,
-        variant,
-        duration,
-      };
-
-      setToasts((prev) => [...prev, newToast]);
+      const newToast: ToastItem = { id, title: options?.title, message, variant, duration, action: options?.action };
+      setToasts((prev) => [...prev, newToast].slice(-MAX_VISIBLE));
 
       if (duration > 0) {
-        setTimeout(() => {
-          dismiss(id);
-        }, duration);
+        timers.current.set(id, window.setTimeout(() => dismiss(id), duration));
       }
-
       return id;
     },
     [baseId, dismiss]
   );
 
-  const success = useCallback(
-    (message: React.ReactNode, options?: ToastOptions) => showToast(message, "SUCCESS", options),
-    [showToast]
-  );
-
-  const error = useCallback(
-    (message: React.ReactNode, options?: ToastOptions) => showToast(message, "ERROR", options),
-    [showToast]
-  );
-
-  const warning = useCallback(
-    (message: React.ReactNode, options?: ToastOptions) => showToast(message, "WARNING", options),
-    [showToast]
-  );
-
-  const info = useCallback(
-    (message: React.ReactNode, options?: ToastOptions) => showToast(message, "INFO", options),
-    [showToast]
-  );
+  const success = useCallback((m: React.ReactNode, o?: ToastOptions) => showToast(m, "SUCCESS", o), [showToast]);
+  const error = useCallback((m: React.ReactNode, o?: ToastOptions) => showToast(m, "ERROR", o), [showToast]);
+  const warning = useCallback((m: React.ReactNode, o?: ToastOptions) => showToast(m, "WARNING", o), [showToast]);
+  const info = useCallback((m: React.ReactNode, o?: ToastOptions) => showToast(m, "INFO", o), [showToast]);
 
   return (
     <ToastContext.Provider value={{ showToast, success, error, warning, info, dismiss, clearAll }}>
       {children}
-      {/* Container hiển thị Toast góc phải màn hình desktop, đáy màn hình mobile */}
+      {/* Mobile: phía trên floating bottom nav; Desktop: góc dưới phải */}
       <div
-        className="fixed bottom-4 right-4 z-[700] flex flex-col gap-2 pointer-events-none max-w-[calc(100vw-32px)]"
+        className="pointer-events-none fixed inset-x-3 bottom-[calc(var(--toast-bottom,6.5rem)_+_env(safe-area-inset-bottom))] z-[70] flex flex-col items-center gap-2 lg:inset-x-auto lg:right-6 lg:bottom-[calc(var(--toast-bottom-desktop,1.5rem))] lg:items-end"
         aria-live="polite"
       >
         {toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto">
+          <div key={toast.id} className="pointer-events-auto w-full sm:w-auto">
             <Toast toast={toast} onDismiss={dismiss} />
           </div>
         ))}
@@ -200,6 +169,24 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     </ToastContext.Provider>
   );
 };
+
+/**
+ * Đẩy vùng toast lên trên khi trang có thanh hành động dính đáy (SaveBar),
+ * để toast "Hoàn tác" không che nút Lưu. Tự khôi phục khi unmount.
+ * @param mobile khoảng cách đáy trên mobile (mặc định 6.5rem = trên bottom nav)
+ * @param desktop khoảng cách đáy trên desktop (mặc định 1.5rem)
+ */
+export function useToastOffset(mobile: string, desktop = "1.5rem") {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--toast-bottom", mobile);
+    root.style.setProperty("--toast-bottom-desktop", desktop);
+    return () => {
+      root.style.removeProperty("--toast-bottom");
+      root.style.removeProperty("--toast-bottom-desktop");
+    };
+  }, [mobile, desktop]);
+}
 
 export const useToast = (): ToastContextType => {
   const context = useContext(ToastContext);

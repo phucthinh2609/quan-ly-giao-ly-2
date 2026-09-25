@@ -1,39 +1,28 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { IconButton } from "./IconButton";
+import { cn } from "../../lib/cn";
 
 export interface PaginationProps {
-  /**
-   * Trang hiện tại (bắt đầu từ 1)
-   */
+  /** Trang hiện tại (bắt đầu từ 1) */
   currentPage: number;
-  /**
-   * Tổng số trang
-   */
+  /** Tổng số trang */
   totalPages: number;
-  /**
-   * Callback khi người dùng chuyển trang
-   */
+  /** Gọi khi chuyển trang */
   onPageChange: (page: number) => void;
-  /**
-   * Tổng số bản ghi (tùy chọn để hiển thị thống kê)
-   */
+  /** Tổng số bản ghi (tùy chọn, để hiển thị thống kê) */
   totalItems?: number;
-  /**
-   * Số bản ghi trên mỗi trang (tùy chọn)
-   */
+  /** Số bản ghi mỗi trang (tùy chọn) */
   pageSize?: number;
-  /**
-   * Có hiển thị văn bản tóm tắt bản ghi hay không
-   */
+  /** Hiển thị dòng tóm tắt số bản ghi */
   showItemCount?: boolean;
   className?: string;
 }
 
 /**
- * Pagination Component (§17 - 03_Component_Library)
- * - Mobile (<640px): Dạng rút gọn chuẩn Wireframe "[←] 1/10 [→]".
- * - Desktop (≥640px): Dạng số trang đầy đủ "[←] [1] [2] [3] ... [10] [→]" kèm tóm tắt bản ghi.
+ * Pagination (03 §5)
+ * - Mobile (< 640px): dạng rút gọn "← 1 / 10 →".
+ * - >= 640px: nút pill từng số trang, trang hiện tại nền night, kèm tóm tắt bản ghi.
  */
 export const Pagination: React.FC<PaginationProps> = ({
   currentPage,
@@ -57,117 +46,84 @@ export const Pagination: React.FC<PaginationProps> = ({
     if (canNext) onPageChange(currentPage + 1);
   };
 
-  // Tính dải số trang hiển thị trên Desktop với dấu "…"
+  // Dải số trang trên desktop, rút gọn bằng "…"
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     const maxVisible = 5;
 
     if (totalPages <= maxVisible + 2) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
+      return pages;
     }
 
-    if (totalPages > maxVisible + 2) {
-      if (currentPage > 3) {
-        pages.push("…");
-      }
+    pages.push(1);
+    if (currentPage > 3) pages.push("…");
 
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
 
-      for (let i = start; i <= end; i++) {
-        pages.push(i);
-      }
-
-      if (currentPage < totalPages - 2) {
-        pages.push("…");
-      }
-
-      pages.push(totalPages);
-    }
+    if (currentPage < totalPages - 2) pages.push("…");
+    pages.push(totalPages);
 
     return pages;
   };
 
-  // Tính số thứ tự bản ghi hiển thị (VD: 1–10 của 128)
+  // VD: 1–10 trong 128
   const renderRangeSummary = () => {
     if (!totalItems || !pageSize) return null;
     const start = (currentPage - 1) * pageSize + 1;
     const end = Math.min(currentPage * pageSize, totalItems);
     return (
-      <span className="text-[13px] text-[#78716C]">
-        Hiển thị <span className="font-semibold text-[#1C1917]">{start}–{end}</span> trong{" "}
-        <span className="font-semibold text-[#1C1917]">{totalItems}</span> bản ghi
+      <span className="text-sm text-ink-3">
+        Hiển thị{" "}
+        <span className="font-semibold text-ink tabular-nums">
+          {start}–{end}
+        </span>{" "}
+        trong <span className="font-semibold text-ink tabular-nums">{totalItems}</span> bản ghi
       </span>
     );
   };
 
   return (
-    <div
-      className={`
-        flex items-center justify-between gap-3 pt-3 text-[#292524] select-none
-        ${className}
-      `}
-      aria-label="Phân trang"
-    >
-      {/* Thông tin số lượng bản ghi (Desktop) */}
-      <div className="hidden sm:block">
-        {showItemCount && renderRangeSummary()}
-      </div>
+    <nav aria-label="Phân trang" className={cn("flex items-center justify-between gap-3 pt-3 select-none", className)}>
+      {/* Tóm tắt (>= sm) */}
+      <div className="hidden sm:block">{showItemCount && renderRangeSummary()}</div>
 
-      {/* 1. MOBILE PAGINATION (<640px): Dạng "[←] 1/10 [→]" */}
-      <div className="flex sm:hidden items-center justify-between w-full">
-        <IconButton
-          aria-label="Trang trước"
-          variant="outline"
-          size="md"
-          disabled={!canPrev}
-          onClick={handlePrev}
-          className="text-[#292524] hover:bg-[#F5F5F4]"
-        >
-          <ChevronLeft className="w-5 h-5" />
+      {/* Mobile: ← 1 / 10 → */}
+      <div className="flex w-full items-center justify-between sm:hidden">
+        <IconButton aria-label="Trang trước" variant="outline" size="md" disabled={!canPrev} onClick={handlePrev}>
+          <ChevronLeft />
         </IconButton>
 
-        <div className="text-[15px] font-semibold text-[#1C1917] px-3">
+        <p className="px-3 text-base font-semibold text-ink tabular-nums" aria-live="polite">
+          <span className="sr-only">Trang </span>
           <span>{currentPage}</span>
-          <span className="text-[#A8A29E] mx-1">/</span>
+          <span className="mx-1.5 text-ink-3" aria-hidden="true">
+            /
+          </span>
+          <span className="sr-only"> trên </span>
           <span>{totalPages}</span>
-        </div>
+        </p>
 
-        <IconButton
-          aria-label="Trang kế tiếp"
-          variant="outline"
-          size="md"
-          disabled={!canNext}
-          onClick={handleNext}
-          className="text-[#292524] hover:bg-[#F5F5F4]"
-        >
-          <ChevronRight className="w-5 h-5" />
+        <IconButton aria-label="Trang kế tiếp" variant="outline" size="md" disabled={!canNext} onClick={handleNext}>
+          <ChevronRight />
         </IconButton>
       </div>
 
-      {/* 2. DESKTOP PAGINATION (≥640px): Dạng đầy đủ có từng số trang */}
-      <div className="hidden sm:flex items-center gap-1.5 ml-auto">
-        {/* Nút lùi trang */}
-        <IconButton
-          aria-label="Trang trước"
-          variant="ghost"
-          size="sm"
-          disabled={!canPrev}
-          onClick={handlePrev}
-          className="text-[#57534E] hover:text-[#1C1917]"
-        >
-          <ChevronLeft className="w-4 h-4" />
+      {/* >= sm: số trang dạng pill */}
+      <div className="ml-auto hidden items-center gap-1 sm:flex">
+        <IconButton aria-label="Trang trước" variant="ghost" size="md" disabled={!canPrev} onClick={handlePrev}>
+          <ChevronLeft />
         </IconButton>
 
-        {/* Các nút số trang */}
         {getPageNumbers().map((page, index) => {
           if (page === "…") {
             return (
               <span
                 key={`ellipsis-${index}`}
-                className="w-[36px] h-[36px] flex items-center justify-center text-[#A8A29E] font-medium"
+                className="flex size-11 items-center justify-center font-medium text-ink-3"
+                aria-hidden="true"
               >
                 …
               </span>
@@ -182,34 +138,23 @@ export const Pagination: React.FC<PaginationProps> = ({
               type="button"
               onClick={() => onPageChange(page as number)}
               aria-current={isCurrent ? "page" : undefined}
-              className={`
-                w-[36px] h-[36px] min-w-[36px] min-h-[36px] rounded-[8px] text-[14px] font-semibold tabular-nums
-                flex items-center justify-center transition-colors duration-150 cursor-pointer
-                outline-none focus-visible:ring-2 focus-visible:ring-[#B4232C]/30
-                ${
-                  isCurrent
-                    ? "bg-[#B4232C] text-white shadow-xs font-bold"
-                    : "text-[#57534E] hover:bg-[#F5F5F4] hover:text-[#1C1917] active:bg-[#E7E5E4]"
-                }
-              `}
+              aria-label={`Trang ${page}`}
+              className={cn(
+                "flex h-11 min-w-11 items-center justify-center rounded-full px-3 text-sm font-semibold tabular-nums",
+                "transition-[background-color,color,transform] duration-150 ease-out-soft active:scale-95",
+                "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary/50",
+                isCurrent ? "bg-night text-on-night" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
+              )}
             >
               {page}
             </button>
           );
         })}
 
-        {/* Nút tiến trang */}
-        <IconButton
-          aria-label="Trang kế tiếp"
-          variant="ghost"
-          size="sm"
-          disabled={!canNext}
-          onClick={handleNext}
-          className="text-[#57534E] hover:text-[#1C1917]"
-        >
-          <ChevronRight className="w-4 h-4" />
+        <IconButton aria-label="Trang kế tiếp" variant="ghost" size="md" disabled={!canNext} onClick={handleNext}>
+          <ChevronRight />
         </IconButton>
       </div>
-    </div>
+    </nav>
   );
 };

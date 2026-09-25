@@ -1,5 +1,12 @@
 import React from "react";
-import { Award, Star } from "lucide-react";
+import { Award } from "lucide-react";
+import { cn } from "../../lib/cn";
+import { scoreGrade } from "../../lib/format";
+import { Badge, BadgeVariant } from "../ui/Badge";
+import { CountUp } from "../ui/CountUp";
+import { ProgressRing } from "../ui/ProgressRing";
+import { Skeleton } from "../ui/Skeleton";
+import { formatScore } from "./parentInsights";
 
 export interface GPAHighlightProps {
   gpa: number;
@@ -10,72 +17,55 @@ export interface GPAHighlightProps {
   className?: string;
 }
 
+const GRADE_BADGE: Record<ReturnType<typeof scoreGrade>["tone"], BadgeVariant> = {
+  success: "success",
+  info: "info",
+  warning: "warning",
+  danger: "error",
+};
+
 /**
- * GPAHighlight (Wireframe C §8, §27)
- *
- * Wireframe C:
- * ┌─────────────────────────────────┐
- * │ ĐIỂM TRUNG BÌNH                │
- * │             8.5                 │
- * │        Kết quả: Tốt             │
- * └─────────────────────────────────┘
- *
- * Information Priority #3 in Parent Grade Overview.
- * Displays GPA with high visual emphasis, Gold token styling, and readable typography.
+ * GPAHighlight (03 §9, 04 §11) — ProgressRing + điểm TB lớn (CountUp) + xếp loại.
+ * Xếp loại lấy từ scoreGrade() để khớp câu tóm tắt ở trang chủ.
  */
-export const GPAHighlight: React.FC<GPAHighlightProps> = ({
-  gpa,
-  rankLabel = "Tốt",
-  periodLabel,
-  isLoading = false,
-  className = "",
-}) => {
+export const GPAHighlight: React.FC<GPAHighlightProps> = ({ gpa, periodLabel, isLoading = false, className }) => {
   if (isLoading) {
     return (
       <div
-        className={`p-6 sm:p-7 rounded-[18px] bg-gradient-to-b from-[#FFFDF7] to-[#FFFBEB] border border-[#FDE68A] animate-pulse text-center space-y-3 min-h-[160px] flex flex-col justify-center items-center ${className}`}
+        aria-hidden="true"
+        className={cn("flex items-center gap-5 rounded-card border border-line bg-surface p-5 shadow-card sm:p-6", className)}
       >
-        <div className="w-24 h-4 bg-[#FDE68A] rounded-md" />
-        <div className="w-28 h-12 bg-[#FDE68A] rounded-xl" />
-        <div className="w-32 h-6 bg-[#FDE68A] rounded-full" />
+        <Skeleton variant="circular" className="size-24 shrink-0" />
+        <div className="flex-1 space-y-3">
+          <Skeleton className="h-5 w-2/3 rounded-full" />
+          <Skeleton className="h-8 w-24 rounded-full" />
+          <Skeleton className="h-4 w-1/2 rounded-full" />
+        </div>
       </div>
     );
   }
 
+  const grade = scoreGrade(gpa);
+
   return (
-    <div
-      aria-label={`Điểm trung bình ${periodLabel ? periodLabel + ":" : ""} ${gpa.toFixed(1)}, Kết quả: ${rankLabel}`}
-      className={`relative p-6 sm:p-7 rounded-[18px] bg-gradient-to-b from-[#FFFDF7] via-[#FFFBEB] to-[#FEF3C7]/40 border-2 border-[#E3B341]/60 shadow-sm text-center overflow-hidden ${className}`}
+    <section
+      aria-label={`Điểm trung bình${periodLabel ? ` ${periodLabel}` : ""}: ${formatScore(gpa)} trên 10, xếp loại ${grade.label}`}
+      className={cn(
+        "flex flex-wrap items-center gap-x-5 gap-y-4 rounded-card border border-line bg-surface p-5 shadow-card sm:p-6",
+        className
+      )}
     >
-      {/* Subtle decorative background symbols */}
-      <div className="absolute top-2 right-3 text-[#E3B341]/20 select-none pointer-events-none text-6xl">
-        ★
-      </div>
-      <div className="absolute -bottom-2 -left-2 text-[#E3B341]/15 select-none pointer-events-none text-6xl">
-        ✦
-      </div>
+      <ProgressRing value={gpa} max={10} tone={grade.tone} size="lg" thickness={9} label="Điểm trung bình trên thang 10">
+        <CountUp value={gpa} decimals={1} className="text-3xl font-bold tracking-tight text-ink" />
+      </ProgressRing>
 
-      {/* Label: ĐIỂM TRUNG BÌNH */}
-      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3B341]/20 border border-[#E3B341]/40 text-[#92400E] text-[13px] sm:text-[14px] font-bold tracking-wider uppercase mb-1">
-        <Star className="w-3.5 h-3.5 fill-[#E3B341] text-[#E3B341]" />
-        <span>ĐIỂM TRUNG BÌNH {periodLabel ? `· ${periodLabel}` : ""}</span>
+      <div className="min-w-0 flex-1 basis-40">
+        <p className="text-lg font-semibold text-ink">Điểm trung bình</p>
+        {periodLabel && <p className="text-sm text-ink-3">{periodLabel} · thang điểm 10</p>}
+        <Badge variant={GRADE_BADGE[grade.tone]} size="lg" icon={<Award />} className="mt-2.5">
+          {grade.label}
+        </Badge>
       </div>
-
-      {/* Huge GPA Score */}
-      <div className="my-2">
-        <span className="text-[44px] sm:text-[52px] font-extrabold font-serif text-[#1C1917] tracking-tight leading-none">
-          {gpa.toFixed(1)}
-        </span>
-        <span className="text-[20px] font-bold text-[#78716C] ml-1">
-          / 10
-        </span>
-      </div>
-
-      {/* Ranking Badge: "Kết quả: Tốt" */}
-      <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white border border-[#E3B341] shadow-xs text-[#92400E] font-bold text-[16px] sm:text-[18px]">
-        <Award className="w-4 h-4 text-[#D97706]" />
-        <span>Kết quả: {rankLabel}</span>
-      </div>
-    </div>
+    </section>
   );
 };

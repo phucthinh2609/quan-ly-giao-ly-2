@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "../../lib/cn";
 
 export type SpinnerSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type SpinnerColor = "primary" | "white" | "neutral" | "gold" | "current";
@@ -11,18 +12,18 @@ export interface SpinnerProps {
 }
 
 const sizeMap: Record<SpinnerSize, string> = {
-  xs: "w-3.5 h-3.5",
-  sm: "w-4 h-4",
-  md: "w-5 h-5",
-  lg: "w-7 h-7",
-  xl: "w-9 h-9",
+  xs: "size-3.5",
+  sm: "size-4",
+  md: "size-5",
+  lg: "size-7",
+  xl: "size-9",
 };
 
 const colorMap: Record<SpinnerColor, string> = {
-  primary: "text-[#B4232C]",
-  white: "text-white",
-  neutral: "text-[#78716C]",
-  gold: "text-[#E3B341]",
+  primary: "text-primary",
+  white: "text-on-primary",
+  neutral: "text-ink-3",
+  gold: "text-gold",
   current: "text-current",
 };
 
@@ -33,29 +34,21 @@ export const Spinner: React.FC<SpinnerProps> = ({
   label = "Đang tải…",
 }) => {
   return (
-    <span
-      role="status"
-      aria-label={label}
-      className={`inline-flex items-center justify-center ${className}`}
-    >
+    <span role="status" aria-label={label} className={cn("inline-flex items-center justify-center", className)}>
       <svg
-        className={`animate-spin ${sizeMap[size]} ${colorMap[color]}`}
+        className={cn("animate-spin", sizeMap[size], colorMap[color])}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
+        aria-hidden="true"
       >
-        <circle
-          className="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          strokeWidth="3.5"
-        />
+        <circle className="opacity-20" cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="3" />
         <path
           className="opacity-90"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          d="M21.5 12a9.5 9.5 0 0 0-9.5-9.5"
         />
       </svg>
       <span className="sr-only">{label}</span>

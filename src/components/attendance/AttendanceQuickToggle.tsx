@@ -1,6 +1,14 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Check, X, Clock, FileCheck, ChevronDown, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Check, MoreHorizontal } from "lucide-react";
 import { AttendanceStatus } from "../../types";
+import { cn } from "../../lib/cn";
+import { gsap, haptic, prefersReducedMotion } from "../../lib/motion";
+import { IconButton } from "../ui/IconButton";
+import { TONE_SOFT } from "../ui/tone";
+import { AttendanceStatusChip } from "./AttendanceStatusChip";
+import { ATTENDANCE_CYCLE, ATTENDANCE_STATUS_META } from "./attendanceStatus";
+
+export { ATTENDANCE_CYCLE, getNextAttendanceStatus } from "./attendanceStatus";
 
 export interface AttendanceQuickToggleProps {
   status: AttendanceStatus;
@@ -23,248 +31,232 @@ export interface StatusMeta {
   badgeBg: string;
 }
 
+/**
+ * Cấu hình hiển thị (giữ API v1). Giá trị class đã chuyển sang token v2.
+ * Nguồn chuẩn mới: ATTENDANCE_STATUS_META trong ./attendanceStatus.
+ */
 export const ATTENDANCE_STATUS_CONFIG: Record<AttendanceStatus, StatusMeta> = {
   PRESENT: {
     status: "PRESENT",
-    label: "Có mặt",
-    shortLabel: "Có",
-    icon: <Check className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />,
-    bg: "bg-[#ECFDF3] hover:bg-[#D1FAE5] active:bg-[#A7F3D0]",
-    text: "text-[#146C47]",
-    border: "border-[#A7F3D0]",
-    activeRing: "focus:ring-[#168154]",
-    badgeBg: "bg-[#168154]",
+    label: ATTENDANCE_STATUS_META.PRESENT.label,
+    shortLabel: ATTENDANCE_STATUS_META.PRESENT.shortLabel,
+    icon: React.createElement(ATTENDANCE_STATUS_META.PRESENT.Icon, { className: "size-5", "aria-hidden": true }),
+    bg: "bg-success-soft hover:bg-success-soft/70",
+    text: "text-success",
+    border: "border-success/30",
+    activeRing: "focus-visible:outline-success/50",
+    badgeBg: "bg-success",
   },
   ABSENT: {
     status: "ABSENT",
-    label: "Vắng",
-    shortLabel: "Vắng",
-    icon: <X className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />,
-    bg: "bg-[#FEF2F2] hover:bg-[#FEE2E2] active:bg-[#FECDD3]",
-    text: "text-[#C73A3A]",
-    border: "border-[#FECDD3]",
-    activeRing: "focus:ring-[#DC4C4C]",
-    badgeBg: "bg-[#C73A3A]",
+    label: ATTENDANCE_STATUS_META.ABSENT.label,
+    shortLabel: ATTENDANCE_STATUS_META.ABSENT.shortLabel,
+    icon: React.createElement(ATTENDANCE_STATUS_META.ABSENT.Icon, { className: "size-5", "aria-hidden": true }),
+    bg: "bg-danger-soft hover:bg-danger-soft/70",
+    text: "text-danger",
+    border: "border-danger/30",
+    activeRing: "focus-visible:outline-danger/50",
+    badgeBg: "bg-danger",
   },
   EXCUSED: {
     status: "EXCUSED",
-    label: "Có phép",
-    shortLabel: "Phép",
-    icon: <FileCheck className="w-5 h-5 stroke-[2.2]" aria-hidden="true" />,
-    bg: "bg-[#FFF8E7] hover:bg-[#FEF0C7] active:bg-[#FDE68A]",
-    text: "text-[#B86F08]",
-    border: "border-[#FEF0C7]",
-    activeRing: "focus:ring-[#D9901A]",
-    badgeBg: "bg-[#B86F08]",
+    label: ATTENDANCE_STATUS_META.EXCUSED.label,
+    shortLabel: ATTENDANCE_STATUS_META.EXCUSED.shortLabel,
+    icon: React.createElement(ATTENDANCE_STATUS_META.EXCUSED.Icon, { className: "size-5", "aria-hidden": true }),
+    bg: "bg-info-soft hover:bg-info-soft/70",
+    text: "text-info",
+    border: "border-info/30",
+    activeRing: "focus-visible:outline-info/50",
+    badgeBg: "bg-info",
   },
   LATE: {
     status: "LATE",
-    label: "Đi muộn",
-    shortLabel: "Muộn",
-    icon: <Clock className="w-5 h-5 stroke-[2.2]" aria-hidden="true" />,
-    bg: "bg-[#FFF7ED] hover:bg-[#FFEDD5] active:bg-[#FED7AA]",
-    text: "text-[#C2410C]",
-    border: "border-[#FED7AA]",
-    activeRing: "focus:ring-[#EA580C]",
-    badgeBg: "bg-[#EA580C]",
+    label: ATTENDANCE_STATUS_META.LATE.label,
+    shortLabel: ATTENDANCE_STATUS_META.LATE.shortLabel,
+    icon: React.createElement(ATTENDANCE_STATUS_META.LATE.Icon, { className: "size-5", "aria-hidden": true }),
+    bg: "bg-warning-soft hover:bg-warning-soft/70",
+    text: "text-warning",
+    border: "border-warning/30",
+    activeRing: "focus-visible:outline-warning/50",
+    badgeBg: "bg-warning",
   },
 };
 
-// Chu trình 1 chạm chuẩn theo yêu cầu: Có mặt → Vắng → Có phép → Đi muộn → Có mặt (§21, §8)
-export const ATTENDANCE_CYCLE: AttendanceStatus[] = [
-  "PRESENT",
-  "ABSENT",
-  "EXCUSED",
-  "LATE",
-];
-
-export function getNextAttendanceStatus(current: AttendanceStatus): AttendanceStatus {
-  const currentIndex = ATTENDANCE_CYCLE.indexOf(current);
-  if (currentIndex === -1) return "PRESENT";
-  const nextIndex = (currentIndex + 1) % ATTENDANCE_CYCLE.length;
-  return ATTENDANCE_CYCLE[nextIndex];
-}
-
 /**
- * AttendanceQuickToggle (§21, §8)
- * - One-touch cycle: Chạm nút chính để xoay vòng trạng thái Có mặt → Vắng → Có phép → Đi muộn
- * - Menu đầy đủ: Cho phép mở menu danh sách chọn trực tiếp bất kỳ trạng thái nào
- * - Touch target chuẩn ≥ 48px, tối ưu cho người lớn tuổi và Giáo lý viên thao tác nhanh
+ * AttendanceQuickToggle (03 §7): chip xoay vòng 1 chạm + nút "..." mở menu chọn trực tiếp.
+ * Menu tự mở lên trên khi gần đáy màn hình (tránh SaveBar và bottom nav).
  */
 export const AttendanceQuickToggle: React.FC<AttendanceQuickToggleProps> = ({
   status,
   onChange,
   disabled = false,
   compact = false,
-  className = "",
+  className,
   ariaLabel,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [placement, setPlacement] = useState<"top" | "bottom">("bottom");
   const containerRef = useRef<HTMLDivElement>(null);
-  const currentConfig = ATTENDANCE_STATUS_CONFIG[status] || ATTENDANCE_STATUS_CONFIG.PRESENT;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const menuId = useId();
 
-  // Xử lý cycle 1 chạm khi nhấn vào nút chính
-  const handleCycle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (disabled) return;
-    const next = getNextAttendanceStatus(status);
-    onChange(next);
-  };
-
-  // Mở/đóng menu chọn trực tiếp
-  const toggleMenu = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (disabled) return;
-    setMenuOpen((prev) => !prev);
-  };
-
-  // Chọn trực tiếp từ menu
-  const handleSelectDirect = (selected: AttendanceStatus) => {
-    onChange(selected);
+  const closeMenu = (returnFocus = false) => {
     setMenuOpen(false);
+    if (returnFocus) triggerRef.current?.focus();
   };
 
-  // Đóng menu khi click ra ngoài
+  const openMenu = () => {
+    if (disabled) return;
+    const trigger = triggerRef.current;
+    if (trigger && typeof window !== "undefined") {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const spaceBelow = window.innerHeight - trigger.getBoundingClientRect().bottom;
+      // Menu cao ~16rem; chừa thêm ~10rem cho SaveBar + bottom nav nổi
+      setPlacement(spaceBelow < rem * 26 ? "top" : "bottom");
+    }
+    setMenuOpen(true);
+  };
+
+  // Mở menu: focus mục đang chọn + hiệu ứng xuất hiện
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const selectedIndex = Math.max(0, ATTENDANCE_CYCLE.indexOf(status));
+    itemRefs.current[selectedIndex]?.focus();
+    const el = menuRef.current;
+    if (!el || prefersReducedMotion()) return;
+    const tween = gsap.fromTo(
+      el,
+      { opacity: 0, scale: 0.96, y: placement === "top" ? 6 : -6 },
+      { opacity: 1, scale: 1, y: 0, duration: 0.18, ease: "power2.out", clearProps: "transform,opacity" }
+    );
+    return () => {
+      tween.kill();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpen]);
+
+  // Đóng khi chạm ra ngoài
   useEffect(() => {
     if (!menuOpen) return;
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (disabled) setMenuOpen(false);
+  }, [disabled]);
+
+  const handleSelect = (next: AttendanceStatus) => {
+    if (next !== status) {
+      haptic();
+      onChange(next);
+    }
+    closeMenu(true);
+  };
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = itemRefs.current.filter(Boolean) as HTMLButtonElement[];
+    const index = items.findIndex((item) => item === document.activeElement);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      items[(index + 1) % items.length]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      items[(index - 1 + items.length) % items.length]?.focus();
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === "End") {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu(true);
+    } else if (event.key === "Tab") {
+      closeMenu();
+    }
+  };
+
+  const prefix = ariaLabel ?? "Trạng thái điểm danh";
+
   return (
-    <div
-      ref={containerRef}
-      className={`relative inline-flex items-center select-none ${className}`}
-    >
-      {/* Group button kết hợp: Nút chính (One-touch cycle) + Nút mở menu trực tiếp */}
-      <div
-        className={`
-          inline-flex items-stretch rounded-[12px] border transition-all duration-150 shadow-xs
-          ${currentConfig.border}
-          ${disabled ? "opacity-60 cursor-not-allowed bg-[#F5F5F4]" : "cursor-pointer"}
-        `}
-      >
-        {/* Nút chính: 1-touch cycle Có mặt → Vắng → Có phép → Đi muộn */}
-        <button
-          type="button"
-          onClick={handleCycle}
-          disabled={disabled}
-          aria-label={
-            ariaLabel
-              ? `${ariaLabel}: hiện tại ${currentConfig.label}. Nhấn để chuyển sang ${
-                  ATTENDANCE_STATUS_CONFIG[getNextAttendanceStatus(status)].label
-                }`
-              : `Trạng thái: ${currentConfig.label}. Nhấn để chuyển trạng thái`
-          }
-          title={`Nhấn 1 chạm để chuyển: ${ATTENDANCE_STATUS_CONFIG[getNextAttendanceStatus(status)].label}`}
-          className={`
-            flex items-center gap-2 font-bold transition-colors
-            min-h-[46px] sm:min-h-[48px] px-3.5 sm:px-4 rounded-l-[11px]
-            ${currentConfig.bg}
-            ${currentConfig.text}
-            ${compact ? "text-[14px]" : "text-[15px] sm:text-[16px]"}
-            focus:outline-none focus:ring-2 ${currentConfig.activeRing} focus:z-10
-            touch-manipulation
-          `}
-        >
-          {/* Icon trạng thái */}
-          <span className="shrink-0">{currentConfig.icon}</span>
+    <div ref={containerRef} className={cn("relative inline-flex items-center gap-1", className)}>
+      <AttendanceStatusChip
+        status={status}
+        onCycle={onChange}
+        disabled={disabled}
+        compact={compact}
+        ariaLabelPrefix={prefix}
+      />
 
-          {/* Nhãn trạng thái (cỡ chữ lớn, độ tương phản cao cho người lớn tuổi) */}
-          <span className="tracking-tight font-semibold">
-            {compact ? currentConfig.shortLabel : currentConfig.label}
-          </span>
-        </button>
+      <IconButton
+        ref={triggerRef}
+        aria-label={`Chọn trực tiếp trạng thái${ariaLabel ? ` · ${ariaLabel}` : ""}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? menuId : undefined}
+        variant="ghost"
+        size="md"
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (menuOpen) closeMenu();
+          else openMenu();
+        }}
+        icon={<MoreHorizontal />}
+        className={cn(menuOpen && "bg-surface-2 text-ink")}
+      />
 
-        {/* Nút dropdown mở menu chọn trực tiếp (Direct Selection Menu) */}
-        <button
-          type="button"
-          onClick={toggleMenu}
-          disabled={disabled}
-          aria-haspopup="true"
-          aria-expanded={menuOpen}
-          aria-label="Mở menu chọn trực tiếp trạng thái điểm danh"
-          title="Chọn trực tiếp từ danh mục đầy đủ"
-          className={`
-            flex items-center justify-center border-l transition-colors
-            min-w-[40px] sm:min-w-[44px] min-h-[46px] sm:min-h-[48px] rounded-r-[11px]
-            ${currentConfig.border}
-            ${currentConfig.bg}
-            ${currentConfig.text}
-            hover:brightness-95 active:brightness-90
-            focus:outline-none focus:ring-2 ${currentConfig.activeRing} focus:z-10
-            touch-manipulation
-          `}
-        >
-          <ChevronDown
-            className={`w-4 h-4 transition-transform duration-200 ${
-              menuOpen ? "rotate-180" : ""
-            }`}
-          />
-        </button>
-      </div>
-
-      {/* Menu chọn trực tiếp 4 trạng thái (Dropdown Popover) */}
       {menuOpen && (
         <div
+          ref={menuRef}
+          id={menuId}
           role="menu"
-          aria-orientation="vertical"
-          className="
-            absolute right-0 top-full mt-1.5 z-50 min-w-[200px] w-max
-            bg-white rounded-[14px] shadow-xl border border-[#E7E5E4] p-1.5
-            animate-in fade-in zoom-in-95 duration-150
-          "
+          aria-label={`Chọn trạng thái · ${prefix}`}
+          onKeyDown={handleMenuKeyDown}
+          className={cn(
+            "absolute right-0 z-50 w-60 max-w-[calc(100vw_-_2rem)] origin-top-right rounded-card border border-line bg-surface p-1.5 shadow-float",
+            placement === "top" ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2"
+          )}
         >
-          <div className="px-3 py-1.5 text-[11px] font-bold text-[#78716C] uppercase tracking-wider border-b border-[#F5F5F4] mb-1">
-            Chọn trạng thái điểm danh
-          </div>
-
-          <div className="space-y-1">
-            {ATTENDANCE_CYCLE.map((st) => {
-              const cfg = ATTENDANCE_STATUS_CONFIG[st];
-              const isSelected = st === status;
+          <p className="px-3 pt-1.5 pb-2 text-sm font-medium text-ink-3">Chọn trạng thái</p>
+          <div className="flex flex-col gap-0.5">
+            {ATTENDANCE_CYCLE.map((option, index) => {
+              const meta = ATTENDANCE_STATUS_META[option];
+              const Icon = meta.Icon;
+              const selected = option === status;
               return (
                 <button
-                  key={st}
+                  key={option}
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
                   type="button"
-                  role="menuitem"
-                  onClick={() => handleSelectDirect(st)}
-                  className={`
-                    w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-[10px]
-                    text-left text-[14px] sm:text-[15px] font-semibold transition-colors
-                    min-h-[44px] cursor-pointer touch-manipulation
-                    ${
-                      isSelected
-                        ? `${cfg.bg} ${cfg.text} ring-1 ${cfg.border}`
-                        : "text-[#292524] hover:bg-[#F5F5F4]"
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={`
-                        w-6 h-6 rounded-full flex items-center justify-center text-white
-                        ${cfg.badgeBg}
-                      `}
-                    >
-                      {React.cloneElement(cfg.icon as React.ReactElement, {
-                        className: "w-3.5 h-3.5 text-white stroke-[3]",
-                      })}
-                    </span>
-                    <span>{cfg.label}</span>
-                  </div>
-
-                  {isSelected && (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-[#168154]" />
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  tabIndex={-1}
+                  onClick={() => handleSelect(option)}
+                  className={cn(
+                    "flex min-h-12 w-full items-center gap-3 rounded-control px-2.5 text-left text-base font-semibold",
+                    "transition-colors duration-150 focus-visible:outline-3 focus-visible:-outline-offset-2",
+                    selected ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
                   )}
+                >
+                  <span
+                    className={cn("inline-flex size-8 shrink-0 items-center justify-center rounded-full", TONE_SOFT[meta.tone])}
+                    aria-hidden="true"
+                  >
+                    <Icon className="size-[1.125rem]" />
+                  </span>
+                  <span className="min-w-0 flex-1">{meta.label}</span>
+                  {selected && <Check className="size-5 shrink-0 text-ink" aria-hidden="true" />}
                 </button>
               );
             })}
